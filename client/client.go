@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	server "zerodupe/server/app"
 )
@@ -17,6 +18,8 @@ type Client struct {
 	server        *server.Server
 	serverStarted bool
 	mu            sync.Mutex
+	uploadDir     string
+	downloadDir   string
 }
 
 // NewClient creates a new client
@@ -24,6 +27,24 @@ func NewClient(serverURL string) *Client {
 	return &Client{
 		serverURL: serverURL,
 	}
+}
+
+// SetUploadDir sets the directory for uploads
+func (client *Client) SetUploadDir(dir string) error {
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create upload directory: %w", err)
+	}
+	client.uploadDir = dir
+	return nil
+}
+
+// SetDownloadDir sets the directory for downloads
+func (client *Client) SetDownloadDir(dir string) error {
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create download directory: %w", err)
+	}
+	client.downloadDir = dir
+	return nil
 }
 
 // StartServer starts the server if it's not already started
@@ -44,44 +65,58 @@ func (client *Client) StartServer() error {
 }
 
 // UploadFile uploads a file to the server
-func (client *Client) UploadFile(filePath string) error {
-	content, contentHash, err := getFileHash(filePath)
+func (client *Client) UploadFile(fileName string) error {
+	filePath := filepath.Join(client.uploadDir, fileName)
+
+	_, err := os.Stat(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to get file info: %w", err)
+	}
+	chunks, fileHash, err := client.getFileChunks(filePath)
 	if err != nil {
 		return err
 	}
 
-	reqBody := struct {
-		FileHash   string `json:"filehash"`
-		FileName   string `json:"file_name"`
-		ChunkHash  string `json:"chunkhash"`
-		ChunkOrder int    `json:"chunk_order"`
-		Content    []byte `json:"content"`
-	}{
-		FileHash:   contentHash,
-		FileName:   filePath,
-		Content:    content,
-		ChunkHash:  contentHash,
-		ChunkOrder: 1,
-	}
+	fmt.Printf("File hash: %s\n", fileHash)
+	fmt.Printf("Total chunks: %d\n", len(chunks))
 
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return fmt.Errorf("failed to marshal JSON: %w", err)
-	}
+	for i, chunk := range chunks {
+		fmt.Printf("Uploading chunk %d/%d (Order: %d, Size: %d bytes, Hash: %s)\n",
+			i+1, len(chunks), chunk.ChunkOrder, len(chunk.Data), chunk.ChunkHash)
+		reqBody := struct {
+			FileHash   string `json:"filehash"`
+			FileName   string `json:"file_name"`
+			ChunkHash  string `json:"chunkhash"`
+			ChunkOrder int    `json:"chunk_order"`
+			Content    []byte `json:"content"`
+		}{
+			FileHash:   fileHash,
+			FileName:   fileName,
+			Content:    chunk.Data,
+			ChunkHash:  chunk.ChunkHash,
+			ChunkOrder: chunk.ChunkOrder,
+		}
 
-	resp, err := http.Post(client.serverURL+"/upload", "application/json", bytes.NewBuffer(jsonData))
-	if err != nil {
-		return fmt.Errorf("failed to connect to server: %w", err)
-	}
-	defer resp.Body.Close()
+		jsonData, err := json.Marshal(reqBody)
+		if err != nil {
+			return fmt.Errorf("failed to marshal JSON: %w", err)
+		}
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response: %w", err)
-	}
+		resp, err := http.Post(client.serverURL+"/upload", "application/json", bytes.NewBuffer(jsonData))
+		if err != nil {
+			return fmt.Errorf("failed to connect to server: %w", err)
+		}
+		defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("server error: %s", respBody)
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read response: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("server error: %s", respBody)
+		}
+
 	}
 
 	fmt.Printf("File uploaded successfully to %s\n", client.serverURL)
@@ -90,7 +125,6 @@ func (client *Client) UploadFile(filePath string) error {
 
 // DownloadFile downloads a file from the server
 func (client *Client) DownloadFile(fileName string) error {
-	//TODO: how to handle getting multiple chunks
 	resp, err := http.Get(client.serverURL + "/download/" + fileName)
 	if err != nil {
 		return fmt.Errorf("failed to connect to server: %w", err)
@@ -106,7 +140,9 @@ func (client *Client) DownloadFile(fileName string) error {
 		return fmt.Errorf("failed to read response: %w", err)
 	}
 
-	err = os.WriteFile(fileName, fileContent, 0644)
+	downloadPath := filepath.Join(client.downloadDir, fileName)
+
+	err = os.WriteFile(downloadPath, fileContent, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}

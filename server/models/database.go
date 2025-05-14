@@ -26,7 +26,7 @@ func Connect(file string) (*DB, error) {
 		return nil, err
 	}
 
-	err = db.AutoMigrate(&File{}, &Chunk{})
+	err = db.AutoMigrate(&File{})
 	if err != nil {
 		return nil, err
 	}
@@ -44,23 +44,27 @@ func (d *DB) Close() error {
 }
 
 // SaveFile saves a file to the database
-func (d *DB) SaveFile(filename string, fileHash string, chunkHash string, order int, content []byte) error {
+func (d *DB) SaveFile(filename string, fileHash string) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 
 	fileStatus := d.CheckFileStatus(filename, fileHash)
 
-	// If both hash and name exist, nothing to do
+	// If both hash and name exist, check if chunk exists
 	if fileStatus.HashExists && fileStatus.NameExists {
 		return nil
 	}
+
 	// If hash exists but name doesn't, add a new file entry with this name
 	if fileStatus.HashExists {
 		file := File{
 			FileHash: fileHash,
 			Name:     filename,
 		}
-		return d.db.Create(&file).Error
+		if err := d.db.Create(&file).Error; err != nil {
+			return err
+		}
+		return nil
 	}
 
 	tx := d.db.Begin()
@@ -75,28 +79,8 @@ func (d *DB) SaveFile(filename string, fileHash string, chunkHash string, order 
 		return err
 	}
 
-	if err := d.AddChunk(tx, fileHash, content, chunkHash, order); err != nil {
-		tx.Rollback()
-		return err
-	}
-
 	return tx.Commit().Error
 
-}
-
-// AddChunk adds a chunk to the database
-func (d *DB) AddChunk(tx *gorm.DB, fileHash string, content []byte, chunkHash string, order int) error {
-	if d.CheckChunkExists(chunkHash) {
-		return nil
-	}
-
-	chunk := Chunk{
-		FileHash:   fileHash,
-		ChunkHash:  chunkHash,
-		Chunk:      content,
-		ChunkOrder: order,
-	}
-	return tx.Create(&chunk).Error
 }
 
 // CheckFileStatus checks if a file exists in the database
@@ -114,29 +98,12 @@ func (d *DB) CheckFileStatus(name string, hash string) FileStatus {
 	return status
 }
 
-// CheckChunkExists checks if a chunk exists in the database
-func (d *DB) CheckChunkExists(hash string) bool {
-	var chunk Chunk
-	result := d.db.First(&chunk, "chunk_hash = ?", hash)
-	return result.Error == nil
-}
-
 // GetFileByName returns a file by name
-func (d *DB) GetFileByName(name string) (*File, error) {
+func (d *DB) GetFileHashByName(name string) (string, error) {
 	var file File
 	result := d.db.First(&file, "name = ?", name)
 	if result.Error != nil {
-		return nil, result.Error
+		return "", result.Error
 	}
-	return &file, nil
-}
-
-// GetFileChunks returns all chunks for a file
-func (d *DB) GetFileChunks(fileHash string) ([]Chunk, error) {
-	var chunks []Chunk
-	result := d.db.Where("file_hash = ?", fileHash).Order("chunk_order ASC").Find(&chunks)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	return chunks, nil
+	return file.FileHash, nil
 }

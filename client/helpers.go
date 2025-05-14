@@ -4,32 +4,75 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 )
 
-// getFileHash returns the SHA-256 hash of a file's content
-func getFileHash(filePath string) ([]byte, string, error) {
+// ChunkSize defines the size of each chunk in bytes (1MB)
+const ChunkSize = 1 * 1024 * 1024
+
+// FileChunk represents a single chunk of a file
+type FileChunk struct {
+	Data       []byte
+	ChunkHash  string
+	ChunkOrder int
+}
+
+// getFileChunks returns the SHA-256 hash of a file's content
+func (client *Client) getFileChunks(filePath string) ([]FileChunk, string, error) {
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return []byte{}, "", fmt.Errorf("file does not exist: %s", filePath)
+		return nil, "", fmt.Errorf("file does not exist: %s", filePath)
 	}
 
 	file, err := os.Open(filePath)
 	if err != nil {
-		return []byte{}, "", err
+		return nil, "", err
 	}
 	defer file.Close()
 
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return []byte{}, "", err
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		return nil, "", fmt.Errorf("failed to calculate file hash: %w", err)
 	}
 
-	fmt.Println(string(content))
+	fileHash := hex.EncodeToString(hasher.Sum(nil))
 
-	h := sha256.New()
-	h.Write(content)
-	contentHash := hex.EncodeToString(h.Sum(nil))
-	fmt.Printf("File content SHA-256 hash: %s\n", contentHash)
+	if _, err := file.Seek(0, 0); err != nil {
+		return nil, "", fmt.Errorf("failed to seek to beginning of file: %w", err)
+	}
 
-	return content, contentHash, nil
+	var chunks []FileChunk
+	buffer := make([]byte, ChunkSize)
+	chunkOrder := 1
+
+	// Splitting the file into chunks
+	for {
+		bytes, err := file.Read(buffer)
+		if err != nil && err != io.EOF {
+			return nil, "", fmt.Errorf("failed to read file: %w", err)
+		}
+		if bytes == 0 {
+			break
+		}
+
+		chunkData := make([]byte, bytes)
+		copy(chunkData, buffer[:bytes])
+
+		chunkHasher := sha256.New()
+		chunkHasher.Write(chunkData)
+		chunkHash := hex.EncodeToString(chunkHasher.Sum(nil))
+
+		chunks = append(chunks, FileChunk{
+			Data:       chunkData,
+			ChunkHash:  chunkHash,
+			ChunkOrder: chunkOrder,
+		})
+
+		chunkOrder++
+		if err == io.EOF {
+			break
+		}
+	}
+
+	return chunks, fileHash, nil
 }
