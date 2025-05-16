@@ -1,0 +1,14 @@
+
+[User] → NewClient(serverURL) → [Client]
+   ↓
+[Client.UploadFile(filePath)]
+   ↓
+[Validate File] → [Split into Chunks] → [Calculate Hashes]
+   ↓
+[Check File Exists] → (if exists) → [Return Success]
+   ↓ (if not exists)
+[Check Chunks Exist] → [Identify Missing Chunks]
+   ↓
+[Upload Missing Chunks] → [Report Progress]
+   ↓
+[Return Success with File Hash]

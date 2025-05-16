@@ -1,0 +1,3 @@
+# ZeroDupe
+
+ZeroDupe is a deduplication file storage system that splits files into chunks and only stores unique chunks, saving storage space.
