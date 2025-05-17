@@ -1,3 +1,71 @@
 # ZeroDupe
 
 ZeroDupe is a deduplication file storage system that splits files into chunks and only stores unique chunks, saving storage space.
+
+## Architecture
+
+The ZeroDupe system is designed with a clean architecture in mind, with clear separation of concerns and dependency injection. The system is divided into three main layers:
+
+1. **Client**: The client layer is responsible for interacting with the user and sending requests to the server. It is implemented in the `packages/client` directory.
+2. **Server**: The server layer is responsible for handling requests from the client and storing/retrieving data. It is implemented in the `internal/server` directory.
+3. **Hasher**: The hasher layer is responsible for calculating hashes for file and chunk data. It is implemented in the `packages/hasher` directory and is used by both the client and server.
+4. **CMD**: The cmd layer is responsible for running the client and server. It is implemented in the `cmd` directory.
+
+## Running the Server
+
+To build the server, use the following command:
+
+```bash
+go build -o zerodupe-server cmd/zerodupe-server/main.go
+./zerodupe-server
+```
+
+The server can be configured using command-line flags. The available flags are:
+
+- `-port`: The port on which the server should listen (default: 8080)
+- `-storage`: The directory in which to store chunk data (default: `data/storage`)
+
+## Running the Server Locally
+
+To run the server locally, use the following command:
+
+```bash
+./zerodupe-server -port 8080 -storage data/storage
+```
+
+## Running the Client
+
+To build the client, use the following command:
+
+```bash
+go build -o zerodupe-client cmd/zerodupe-client/main.go
+./zerodupe-client
+```
+
+The client can be used to upload and download files from the server. The available commands are:
+
+- `upload`: Upload a file to the server
+- `download`: Download a file from the server
+
+The client can be configured using command-line flags. The available flags are:
+
+- `-server`: The URL of the server to connect to (default: `http://localhost:8080`)
+- `-o`: The output directory for downloaded files (default: `.`)
+- `-n`: The name of the downloaded file (default: the file hash)
+
+## Example Usage
+
+To upload a file to the server, use the following command:
+
+```bash
+./zerodupe-client upload -server http://localhost:8080 /path/to/file
+```
+
+To download a file from the server, use the following command:
+
+```bash
+./zerodupe-client download -server http://localhost:8080 -o /path/to/output -n custom_name.txt HASH
+```
+
+Where `HASH` is the hash of the file to download.
+

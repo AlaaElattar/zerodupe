@@ -24,17 +24,6 @@ func CalculateChunkHash(data []byte) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-// CalculateFileHash computes the SHA-256 hash of a file by hashing its chunks' hashes
-func CalculateFileHash(chunks []FileChunk) string {
-	fileHasher := sha256.New()
-
-	for _, chunk := range chunks {
-		fileHasher.Write([]byte(chunk.ChunkHash))
-	}
-
-	return hex.EncodeToString(fileHasher.Sum(nil))
-}
-
 // SplitFileIntoChunks reads a file and splits it into chunks
 func SplitFileIntoChunks(filePath string) ([]FileChunk, string, error) {
 	// Check if file exists
