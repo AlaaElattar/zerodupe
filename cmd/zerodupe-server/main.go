@@ -12,8 +12,6 @@ import (
 
 func main() {
 	port := flag.Int("port", 8080, "Server port")
-	flag.Parse()
-
 	storageDir := flag.String("storage", "data/storage", "Storage directory")
 	flag.Parse()
 

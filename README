@@ -25,6 +25,75 @@ The server can be configured using command-line flags. The available flags are:
 - `-port`: The port on which the server should listen (default: 8080)
 - `-storage`: The directory in which to store chunk data (default: `data/storage`)
 
+## Running the server with Docker
+
+### Prerequisites
+
+- Docker
+- Docker Compose
+
+### Starting the Server
+
+To start the server, run:
+
+```bash
+docker-compose up -d zerodupe-server
+```
+
+This will start the server in detached mode, listening on port 8080.
+
+The port can be changed by modifying the `docker-compose.yml` file.
+
+### Using the Client
+
+### Uploading Files
+
+To upload a file to the server, run:
+
+```bash
+docker-compose run --rm \
+  -v $(pwd)/path/to/file.txt:/app/file.txt \
+  zerodupe-client upload -server http://zerodupe-server:8080 /app/file.txt
+```
+
+Example with a test file:
+
+```bash
+echo "This is a test file" > test.txt
+
+docker-compose run --rm \
+  -v $(pwd)/test.txt:/app/test.txt \
+  zerodupe-client upload -server http://zerodupe-server:8080 /app/test.txt
+```
+
+### Downloading Files
+
+To download a file from the server:
+
+```bash
+docker-compose run --rm \
+  -v $(pwd)/downloads:/app/downloads \
+  zerodupe-client download -server http://zerodupe-server:8080 -o /app/downloads -n output.txt <FILE_HASH>
+```
+
+Example with a previously uploaded file:
+
+```bash
+mkdir -p downloads
+
+docker-compose run --rm \
+  -v $(pwd)/downloads:/app/downloads \
+  zerodupe-client download -server http://zerodupe-server:8080 -o /app/downloads -n retrieved.txt ba38b8f136826a50c19d98b90ae1a0b34212b243c900a82da08c7eedeb45435b
+```
+
+### Stopping the Server
+
+To stop the server, run:
+
+```bash
+docker-compose down
+```
+
 ## Running the Server Locally
 
 To run the server locally, use the following command:
@@ -68,4 +137,3 @@ To download a file from the server, use the following command:
 ```
 
 Where `HASH` is the hash of the file to download.
-

@@ -17,8 +17,8 @@ func main() {
 	uploadServerURL := uploadCmd.String("server", "http://localhost:8080", "Server URL")
 
 	downloadCmd := flag.NewFlagSet("download", flag.ExitOnError)
+	downloadServerURL := downloadCmd.String("server", "http://localhost:8080", "Server URL")
 
-	serverURL := flag.String("server", "http://localhost:8080", "Server URL")
 	downloadOutput := downloadCmd.String("o", ".", "Output directory")
 	downloadFileName := downloadCmd.String("n", "", "Output file name (default: file hash)")
 
@@ -48,7 +48,7 @@ func main() {
 			os.Exit(1)
 		}
 		fileHash := downloadCmd.Arg(0)
-		downloadFile(*serverURL, fileHash, *downloadOutput, *downloadFileName)
+		downloadFile(*downloadServerURL, fileHash, *downloadOutput, *downloadFileName)
 
 	default:
 		printUsage()
