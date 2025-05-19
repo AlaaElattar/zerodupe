@@ -11,7 +11,7 @@ import (
 func main() {
 
 	// zerodupe upload -server http://myhost:8080 file.txt
-    // zerodupe download -server http://myhost:8080 -o ./downloads -n custom_name.txt HASH
+	// zerodupe download -server http://myhost:8080 -o ./downloads -n custom_name.txt HASH
 
 	uploadCmd := flag.NewFlagSet("upload", flag.ExitOnError)
 	uploadServerURL := uploadCmd.String("server", "http://localhost:8080", "Server URL")
@@ -59,15 +59,15 @@ func main() {
 }
 
 func printUsage() {
-    fmt.Println("Usage:")
-    fmt.Println("  zerodupe upload [flags] <filepath>")
-    fmt.Println("  zerodupe download [flags] <filehash>")
-    fmt.Println("\nFlags for upload:")
-    fmt.Println("  -server string    Server URL (default \"http://localhost:8080\")")
-    fmt.Println("\nFlags for download:")
-    fmt.Println("  -server string    Server URL (default \"http://localhost:8080\")")
-    fmt.Println("  -o string         Output directory (default \".\")")
-    fmt.Println("  -n string         Output file name (default: file hash)")
+	fmt.Println("Usage:")
+	fmt.Println("  zerodupe upload [flags] <filepath>")
+	fmt.Println("  zerodupe download [flags] <filehash>")
+	fmt.Println("\nFlags for upload:")
+	fmt.Println("  -server string    Server URL (default \"http://localhost:8080\")")
+	fmt.Println("\nFlags for download:")
+	fmt.Println("  -server string    Server URL (default \"http://localhost:8080\")")
+	fmt.Println("  -o string         Output directory (default \".\")")
+	fmt.Println("  -n string         Output file name (default: file hash)")
 }
 func uploadFile(serverURL, filePath string) {
 	fmt.Printf("Uploading file %s to %s\n", filePath, serverURL)
