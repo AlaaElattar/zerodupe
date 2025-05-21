@@ -112,7 +112,7 @@ func (h *Handler) CheckChunkHashesHandler(c *gin.Context) {
 	c.JSON(200, response)
 }
 
-// DownloadFileHandler handles file download requests
+// DownloadFileHandler returns the chunks hashes ordered
 func (h *Handler) DownloadFileHandler(c *gin.Context) {
 	fileHash := c.Param("hash")
 
@@ -128,17 +128,30 @@ func (h *Handler) DownloadFileHandler(c *gin.Context) {
 		return metadata.Chunks[i].ChunkOrder < metadata.Chunks[j].ChunkOrder
 	})
 
-	// Read each chunk and append to file content
-	var fileContent []byte
+	var orderedHashes []string
 	for _, chunk := range metadata.Chunks {
-		chunkData, err := h.storage.GetChunkData(chunk.ChunkHash)
-		if err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
-			return
-		}
-		fileContent = append(fileContent, chunkData...)
+		orderedHashes = append(orderedHashes, chunk.ChunkHash)
 	}
 
-	c.Data(http.StatusOK, "application/octet-stream", fileContent)
+	// return chunks hashes ordered
+	result := model.DownloadFileResponse{
+		FileHash:    fileHash,
+		ChunkHashes: orderedHashes,
+		ChunksCount: len(orderedHashes),
+	}
 
+	c.JSON(http.StatusOK, result)
+
+}
+
+func (h *Handler) GetChunkContent(c *gin.Context) {
+	chunkHash := c.Param("hash")
+	content, err := h.storage.GetChunkData(chunkHash)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Header("Content-Type", "application/octet-stream")
+	c.Data(http.StatusOK, "application/octet-stream", content)
 }

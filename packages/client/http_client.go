@@ -104,7 +104,7 @@ func (c *HTTPClient) UploadChunk(request UploadRequest) (*UploadResponse, error)
 	return &result, nil
 }
 
-func (c *HTTPClient) DownloadFile(fileHash string) ([]byte, error) {
+func (c *HTTPClient) DownloadFileHashes(fileHash string) (*DownloadFileHashesResponse, error) {
 	resp, err := c.httpClient.Get(c.serverURL + "/download/" + fileHash)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to server: %w", err)
@@ -115,10 +115,31 @@ func (c *HTTPClient) DownloadFile(fileHash string) ([]byte, error) {
 		return nil, fmt.Errorf("server error: %s", resp.Status)
 	}
 
-	fileContent, err := io.ReadAll(resp.Body)
+	var result DownloadFileHashesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &result, nil
+}
+
+func (c *HTTPClient) DownloadChunkContent(chunkHash string) ([]byte, error) {
+	resp, err := c.httpClient.Get(c.serverURL + "/chunk/" + chunkHash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to server: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("server error: %s", resp.Status)
+	}
+
+	chunkContent, err := io.ReadAll(resp.Body)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	return fileContent, nil
+	return chunkContent, nil
+
 }

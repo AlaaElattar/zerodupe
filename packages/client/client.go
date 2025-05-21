@@ -2,17 +2,18 @@ package client
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
+	// "os"
+	// "path/filepath"
 	"time"
 	"zerodupe/packages/hasher"
 )
 
 // Client represents a client that uploads files to the server
 type Client struct {
-	api      API
-	checker  *FileChecker
-	uploader *Uploader
+	api        API
+	checker    *FileChecker
+	uploader   *Uploader
+	downloader *Downloader
 }
 
 // NewClient creates a new client
@@ -20,9 +21,10 @@ func NewClient(serverURL string) *Client {
 	httpClient := NewHTTPClient(serverURL, 30*time.Second)
 
 	return &Client{
-		api:      httpClient,
-		checker:  NewFileChecker(httpClient),
-		uploader: NewUploader(httpClient),
+		api:        httpClient,
+		checker:    NewFileChecker(httpClient),
+		uploader:   NewUploader(httpClient),
+		downloader: NewDownloader(httpClient),
 	}
 }
 
@@ -78,21 +80,22 @@ func (client *Client) DownloadFile(fileHash string, outputDir string, fileName s
 		return fmt.Errorf("file does not exist on server")
 	}
 
-	fmt.Printf("File exists on serverp. Downloading...\n")
+	fmt.Printf("File exists on server. Downloading...\n")
 
-	content, err := client.api.DownloadFile(fileHash)
+	hashes, err := client.api.DownloadFileHashes(fileHash)
 	if err != nil {
 		return err
 	}
 
-	downloadPath := filepath.Join(outputDir, fileName)
-	err = os.WriteFile(downloadPath, content, 0644)
+	content, err := client.downloader.DownloadChunks(hashes)
 	if err != nil {
-		return fmt.Errorf("failed to write file: %w", err)
+		return err
 	}
 
-	fmt.Printf("File downloaded successfully to %s\n", outputDir)
-	fmt.Printf("File path: %s\n", downloadPath)
+	// combine chunks into file
+	if err := hasher.CombineChunksIntoFile(content, outputDir, fileName); err != nil {
+		return err
+	}
 
 	return nil
 }

@@ -44,6 +44,7 @@ func (server *Server) registerHandlers() {
 	server.router.GET("/check/:filehash", server.handler.CheckFileHashHandler)
 	server.router.POST("/check", server.handler.CheckChunkHashesHandler)
 	server.router.GET("/download/:hash", server.handler.DownloadFileHandler)
+	server.router.GET("/chunk/:hash", server.handler.GetChunkContent)
 
 }
 

@@ -37,3 +37,9 @@ type CheckChunksResponse struct {
 	Exists  []string `json:"exists"`
 	Missing []string `json:"missing"`
 }
+
+type DownloadFileResponse struct {
+	FileHash    string   `json:"filehash" binding:"required"`
+	ChunkHashes []string `json:chunk_hashes`
+	ChunksCount int      `json:chunks_count`
+}

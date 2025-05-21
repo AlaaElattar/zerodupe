@@ -3,8 +3,10 @@ package hasher
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 )
 
 // ChunkSizeBytes defines the size of each chunk in bytes (1MB)
@@ -81,4 +83,28 @@ func SplitFileIntoChunks(filePath string) ([]FileChunk, string, error) {
 func VerifyChunkHash(data []byte, expectedHash string) (bool, string) {
 	actualHash := CalculateChunkHash(data)
 	return actualHash == expectedHash, actualHash
+}
+
+func CombineChunksIntoFile(chunks [][]byte, outputDir string, fileName string) error {
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return fmt.Errorf("failed to create output directory: %w", err)
+	}
+
+	// Create the output file
+	outputPath := filepath.Join(outputDir, fileName)
+	outputFile, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer outputFile.Close()
+
+	for i, chunk := range chunks {
+		if _, err := outputFile.Write(chunk); err != nil {
+			return fmt.Errorf("failed to write chunk %d: %w", i, err)
+		}
+	}
+
+	fmt.Printf("File %s created successfully at %s\n", fileName, outputDir)
+	return nil
+
 }

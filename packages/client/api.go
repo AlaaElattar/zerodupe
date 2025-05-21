@@ -11,5 +11,7 @@ type API interface {
 	UploadChunk(request UploadRequest) (*UploadResponse, error)
 
 	// DownloadFile downloads a file from the server
-	DownloadFile(fileHash string) ([]byte, error)
+	DownloadFileHashes(fileHash string) (*DownloadFileHashesResponse, error)
+
+	DownloadChunkContent(chunkHash string) ([]byte, error)
 }
