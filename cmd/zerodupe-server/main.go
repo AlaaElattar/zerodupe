@@ -15,10 +15,8 @@ func main() {
 	storageDir := flag.String("storage", "data/storage", "Storage directory")
 	flag.Parse()
 
-	config := config.Config{
-		Port:       *port,
-		StorageDir: *storageDir,
-	}
+    config := config.NewConfig(*port, *storageDir)
+
 
 	if err := os.MkdirAll(*storageDir, 0755); err != nil {
 		log.Fatalf("Failed to create storage directory: %v", err)

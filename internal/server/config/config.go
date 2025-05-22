@@ -6,9 +6,10 @@ type Config struct {
 	StorageDir string
 }
 
-func NewConfig() Config {
+// not to be hard coded
+func NewConfig(port int, storageDir string) Config {
 	return Config{
-		Port:       8080,
-		StorageDir: "server/storage",
+		Port:       port,
+		StorageDir: storageDir,
 	}
 }

@@ -61,6 +61,7 @@ func (client *Client) UploadFile(filePath string) error {
 		return err
 	}
 
+	// make sever returns not existing chunks 
 	if err := client.uploader.UploadChunks(chunks, fileHash, filePath, existingChunks); err != nil {
 		return err
 	}
