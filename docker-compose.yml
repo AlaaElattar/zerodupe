@@ -18,7 +18,7 @@ services:
   zerodupe-client:
     build:
       context: .
-      dockerfile: packages/client/Dockerfile
+      dockerfile: pkg/client/Dockerfile
     container_name: zerodupe-client
     depends_on:
       - zerodupe-server

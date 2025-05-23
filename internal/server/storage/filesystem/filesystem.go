@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"zerodupe/internal/server/model"
-	"zerodupe/packages/hasher"
+	"zerodupe/pkg/hasher"
 )
 
 // FilesystemStorage implements the Storage interface using the filesystem

@@ -34,7 +34,6 @@ type CheckFileResponse struct {
 
 // CheckChunksResponse represents a response to a chunks existence check
 type CheckChunksResponse struct {
-	Exists  []string `json:"exists"`
 	Missing []string `json:"missing"`
 }
 

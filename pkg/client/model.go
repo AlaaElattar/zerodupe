@@ -1,32 +1,33 @@
 package client
 
-type UploadRequest struct {
+// ChunkUploadRequest represents a request to upload a chunk to the server
+type ChunkUploadRequest struct {
 	FileHash   string `json:"filehash" binding:"required"`
 	ChunkHash  string `json:"chunkhash" binding:"required"`
 	ChunkOrder int    `json:"chunk_order" binding:"required"`
 	Content    []byte `json:"content"`
 }
 
-// UploadResponse represents a response from the server after uploading a chunk
-type UploadResponse struct {
+// ChunkUploadResponse represents a response from the server after uploading a chunk
+type ChunkUploadResponse struct {
 	Message      string `json:"message"`
 	FileHash     string `json:"fileHash"`
 	HashMismatch bool   `json:"hashMismatch"`
 }
 
-// CheckFileResponse represents a response from the server when checking if a file exists
-type CheckFileResponse struct {
+// FileExistsResponse represents a response from the server when checking if a file exists
+type FileExistsResponse struct {
 	Exists bool   `json:"exists"`
 	Hash   string `json:"hash"`
 }
 
-// CheckChunksRequest represents a request to check if chunks exist on the server
-type CheckChunksRequest struct {
+// MissingChunksRequest represents a request to check if chunks exist on the server
+type MissingChunksRequest struct {
 	Hashes []string `json:"hashes"`
 }
 
-// CheckChunksResponse represents a response from the server when checking if chunks exist
-type CheckChunksResponse struct {
+// MissingChunksResponse represents a response from the server when checking if chunks exist
+type MissingChunksResponse struct {
 	Exists  []string `json:"exists"`
 	Missing []string `json:"missing"`
 }
@@ -37,7 +38,8 @@ type DownloadFileHashesResponse struct {
 	ChunksCount int      `json:chunks_count`
 }
 
-type chunkResult struct {
+// ChunkDownloadResult represents the result of downloading a chunk
+type ChunkDownloadResult struct {
 	index   int
 	content []byte
 	err     error

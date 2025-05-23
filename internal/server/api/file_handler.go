@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"zerodupe/internal/server/model"
-	"zerodupe/packages/hasher"
+	"zerodupe/pkg/hasher"
 )
 
 func (server *Server) CheckFileExists(fileHash string) (bool, error) {

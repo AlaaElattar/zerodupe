@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"zerodupe/packages/client"
+	"zerodupe/pkg/client"
 )
 
 func main() {
@@ -69,17 +69,22 @@ func printUsage() {
 	fmt.Println("  -o string         Output directory (default \".\")")
 	fmt.Println("  -n string         Output file name (default: file hash)")
 }
+
+// uploadFile uploads a file to the server
 func uploadFile(serverURL, filePath string) {
 	fmt.Printf("Uploading file %s to %s\n", filePath, serverURL)
 
+	// Initialize client
 	client := client.NewClient(serverURL)
 
+	// Upload file
 	err := client.UploadFile(filePath)
 	if err != nil {
 		log.Fatalf("Failed to upload file: %v", err)
 	}
 }
 
+// downloadFile downloads a file from the server
 func downloadFile(serverURL, fileHash, outputDir, fileName string) {
 	fmt.Printf("Downloading file with hash %s from %s\n", fileHash, serverURL)
 

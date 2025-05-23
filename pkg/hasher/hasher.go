@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 )
@@ -26,56 +25,29 @@ func CalculateChunkHash(data []byte) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-// SplitFileIntoChunks reads a file and splits it into chunks
-func SplitFileIntoChunks(filePath string) ([]FileChunk, string, error) {
-	// Check if file exists
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return nil, "", err
-	}
-
-	// Open the file
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, "", err
-	}
-	defer file.Close()
-
+// SplitDataIntoChunks splits a byte slice into chunks and returns them along with the file hash
+func SplitDataIntoChunks(data []byte) ([]FileChunk, string, error) {
 	fileHasher := sha256.New()
-	buffer := make([]byte, ChunkSizeBytes)
-	chunkOrder := 1
 	var chunks []FileChunk
 
-	// Splitting the file into chunks
-	for {
-		bytes, err := file.Read(buffer)
-		if err != nil && err != io.EOF {
-			return nil, "", err
-		}
-		if bytes == 0 {
-			break
+	for i, order := 0, 1; i < len(data); i, order = i+ChunkSizeBytes, order+1 {
+		end := i + ChunkSizeBytes
+		if end > len(data) {
+			end = len(data)
 		}
 
-		chunkData := make([]byte, bytes)
-		copy(chunkData, buffer[:bytes])
-
+		chunkData := data[i:end]
 		chunkHash := CalculateChunkHash(chunkData)
 		fileHasher.Write([]byte(chunkHash))
 
 		chunks = append(chunks, FileChunk{
 			Data:       chunkData,
 			ChunkHash:  chunkHash,
-			ChunkOrder: chunkOrder,
+			ChunkOrder: order,
 		})
-
-		chunkOrder++
-		if err == io.EOF {
-			break
-		}
 	}
 
-	// Get the file hash
 	fileHash := hex.EncodeToString(fileHasher.Sum(nil))
-
 	return chunks, fileHash, nil
 }
 

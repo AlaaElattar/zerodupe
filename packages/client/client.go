@@ -2,16 +2,17 @@ package client
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
-	"zerodupe/pkg/hasher"
+	"zerodupe/packages/hasher"
 )
 
 // Client represents a client that uploads files to the server
 type Client struct {
-	api        API
-	checker    *FileChecker
-	uploader   *ChunkUploader
-	downloader *ChunkDownloader
+	api      API
+	checker  *FileChecker
+	uploader *Uploader
 }
 
 // NewClient creates a new client
@@ -19,38 +20,26 @@ func NewClient(serverURL string) *Client {
 	httpClient := NewHTTPClient(serverURL, 30*time.Second)
 
 	return &Client{
-		api:        httpClient,
-		checker:    NewFileChecker(httpClient),
-		uploader:   NewUploader(httpClient),
-		downloader: NewDownloader(httpClient),
+		api:      httpClient,
+		checker:  NewFileChecker(httpClient),
+		uploader: NewUploader(httpClient),
 	}
 }
 
 // UploadFile uploads a file to the server
-// It handles file validation, chunking, and coordinating the upload process
 func (client *Client) UploadFile(filePath string) error {
 	// check if file exists
 	if err := validateFile(filePath); err != nil {
 		return err
 	}
 
-	// Read file content
-	fileContent, err := getFileContent(filePath)
+	// split file into chunks && get file hash
+	chunks, fileHash, err := hasher.SplitFileIntoChunks(filePath)
 	if err != nil {
 		return err
 	}
 
-	if len(fileContent) == 0 {
-		return fmt.Errorf("cannot upload empty file")
-	}
-
-	// Split data into chunks and calculate file hash
-	chunks, fileHash, err := hasher.SplitDataIntoChunks(fileContent)
-	if err != nil {
-		return err
-	}
-
-	// Check if file already exists on server
+	// check file exists on server or not
 	exists, err := client.checker.CheckFileExists(fileHash)
 	if err != nil {
 		return err
@@ -64,13 +53,12 @@ func (client *Client) UploadFile(filePath string) error {
 	fmt.Printf("File hash: %s\n", fileHash)
 	fmt.Printf("Total chunks: %d\n", len(chunks))
 
-	// Identify which chunks already exist on the server
+	// check chunks exists on server or not
 	existingChunks, err := client.checker.IdentifyExistingChunks(chunks)
 	if err != nil {
 		return err
 	}
 
-	// make sever returns not existing chunks
 	if err := client.uploader.UploadChunks(chunks, fileHash, filePath, existingChunks); err != nil {
 		return err
 	}
@@ -90,22 +78,21 @@ func (client *Client) DownloadFile(fileHash string, outputDir string, fileName s
 		return fmt.Errorf("file does not exist on server")
 	}
 
-	fmt.Printf("File exists on server. Downloading...\n")
+	fmt.Printf("File exists on serverp. Downloading...\n")
 
-	hashes, err := client.api.GetFileChunks(fileHash)
+	content, err := client.api.DownloadFile(fileHash)
 	if err != nil {
 		return err
 	}
 
-	content, err := client.downloader.DownloadChunks(hashes)
+	downloadPath := filepath.Join(outputDir, fileName)
+	err = os.WriteFile(downloadPath, content, 0644)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to write file: %w", err)
 	}
 
-	// combine chunks into file
-	if err := hasher.CombineChunksIntoFile(content, outputDir, fileName); err != nil {
-		return err
-	}
+	fmt.Printf("File downloaded successfully to %s\n", outputDir)
+	fmt.Printf("File path: %s\n", downloadPath)
 
 	return nil
 }

@@ -6,9 +6,9 @@ ZeroDupe is a deduplication file storage system that splits files into chunks an
 
 The ZeroDupe system is designed with a clean architecture in mind, with clear separation of concerns and dependency injection. The system is divided into three main layers:
 
-1. **Client**: The client layer is responsible for interacting with the user and sending requests to the server. It is implemented in the `packages/client` directory.
+1. **Client**: The client layer is responsible for interacting with the user and sending requests to the server. It is implemented in the `pkg/client` directory.
 2. **Server**: The server layer is responsible for handling requests from the client and storing/retrieving data. It is implemented in the `internal/server` directory.
-3. **Hasher**: The hasher layer is responsible for calculating hashes for file and chunk data. It is implemented in the `packages/hasher` directory and is used by both the client and server.
+3. **Hasher**: The hasher layer is responsible for calculating hashes for file and chunk data. It is implemented in the `pkg/hasher` directory and is used by both the client and server.
 4. **CMD**: The cmd layer is responsible for running the client and server. It is implemented in the `cmd` directory.
 
 ## Running the Server

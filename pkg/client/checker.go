@@ -2,7 +2,7 @@ package client
 
 import (
 	"fmt"
-	"zerodupe/packages/hasher"
+	"zerodupe/pkg/hasher"
 )
 
 // FileChecker handles checking if files and chunks exist on the server
@@ -25,18 +25,13 @@ func (fc *FileChecker) CheckFileExists(fileHash string) (bool, error) {
 // IdentifyExistingChunks checks which chunks already exist on the server
 func (fc *FileChecker) IdentifyExistingChunks(chunks []hasher.FileChunk) (map[string]bool, error) {
 	// Extract chunk hashes
-	chunkHashes := make([]string, 0, len(chunks))
-	for _, chunk := range chunks {
-		chunkHashes = append(chunkHashes, chunk.ChunkHash)
-	}
+	chunkHashes := extractChunkHashes(chunks)
 
-	// Check which chunks exist on server
-	existingChunks, missingChunks, err := fc.api.CheckChunksExists(chunkHashes)
+	// Get missing chunks from server
+	missingChunks, err := fc.api.GetMissingChunks(chunkHashes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check chunks: %w", err)
 	}
-
-	fmt.Printf("Existing chunks: %d, Missing chunks: %d\n", len(existingChunks), len(missingChunks))
 
 	// If all chunks exist, we can skip the upload
 	if len(missingChunks) == 0 {
@@ -44,11 +39,35 @@ func (fc *FileChecker) IdentifyExistingChunks(chunks []hasher.FileChunk) (map[st
 		return nil, nil
 	}
 
-	// Create a map for quick lookup
-	existingChunksMap := make(map[string]bool)
-	for _, hash := range existingChunks {
-		existingChunksMap[hash] = true
-	}
+	existingChunksMap := buildExistingChunksMap(chunkHashes, missingChunks)
+
+	fmt.Printf("Existing chunks: %d, Missing chunks: %d\n", len(existingChunksMap), len(missingChunks))
 
 	return existingChunksMap, nil
+}
+
+// extractChunkHashes extracts hashes from a slice of FileChunks
+func extractChunkHashes(chunks []hasher.FileChunk) []string {
+	hashes := make([]string, 0, len(chunks))
+	for _, chunk := range chunks {
+		hashes = append(hashes, chunk.ChunkHash)
+	}
+	return hashes
+}
+
+// buildExistingChunksMap creates a map of existing chunks by comparing all chunks with missing chunks
+func buildExistingChunksMap(allHashes []string, missingHashes []string) map[string]bool {
+	missingMap := make(map[string]bool)
+	for _, hash := range missingHashes {
+		missingMap[hash] = true
+	}
+
+	existingMap := make(map[string]bool)
+	for _, hash := range allHashes {
+		if !missingMap[hash] {
+			existingMap[hash] = true
+		}
+	}
+
+	return existingMap
 }

@@ -4,14 +4,14 @@ type API interface {
 	// CheckFileExists checks if a file exists on the server
 	CheckFileExists(fileHash string) (bool, error)
 
-	// CheckChunksExists checks if chunks exist on the server
-	CheckChunksExists(hashes []string) ([]string, []string, error)
+	// GetMissingChunks checks if chunks exist on the server
+	GetMissingChunks(hashes []string) ([]string, error)
 
 	// UploadChunk uploads a chunk to the server
-	UploadChunk(request UploadRequest) (*UploadResponse, error)
+	UploadChunk(request ChunkUploadRequest) (*ChunkUploadResponse, error)
 
 	// DownloadFile downloads a file from the server
-	DownloadFileHashes(fileHash string) (*DownloadFileHashesResponse, error)
+	GetFileChunks(fileHash string) (*DownloadFileHashesResponse, error)
 
-	DownloadChunkContent(chunkHash string) ([]byte, error)
+	DownloadChunk(chunkHash string) ([]byte, error)
 }

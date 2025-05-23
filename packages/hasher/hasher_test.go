@@ -20,24 +20,15 @@ func createTestingFile(t *testing.T, name string, content []byte) string {
 	return tmpFile.Name()
 }
 
-func getTestingFileContent(t *testing.T, filePath string) []byte {
-	t.Helper()
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		t.Fatalf("Failed to read file: %v", err)
-	}
-	return content
-}
-
 func TestCalculateChunkHash(t *testing.T) {
 	t.Run("Test CalculateChunkHash calculates correct hash for given data", func(t *testing.T) {
-		data := []byte("hello world")
-		expectedHash := "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+	data := []byte("hello world")
+	expectedHash := "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
 
-		actualHash := CalculateChunkHash(data)
-		if actualHash != expectedHash {
-			t.Errorf("Expected hash %s, got %s", expectedHash, actualHash)
-		}
+	actualHash := CalculateChunkHash(data)
+	if actualHash != expectedHash {
+		t.Errorf("Expected hash %s, got %s", expectedHash, actualHash)
+	}
 	})
 
 	t.Run("Test CalculateChunkHash calculates different hash for different data", func(t *testing.T) {
@@ -48,13 +39,14 @@ func TestCalculateChunkHash(t *testing.T) {
 		if hash1 == hash2 {
 			t.Errorf("Expected different hashes for different data, got %s and %s", hash1, hash2)
 		}
-	})
+	})	
 }
 
-func TestSplitDataIntoChunks(t *testing.T) {
-	t.Run("Test SplitDataIntoChunks with empty data returns no chunks", func(t *testing.T) {
-		data := []byte("")
-		chunks, _, err := SplitDataIntoChunks(data)
+func TestSplitFileIntoChunks(t *testing.T) {
+
+	t.Run("Test SplitFileIntoChunks with empty file returns no chunks", func(t *testing.T) {
+		filePath := createTestingFile(t, "empty.txt", []byte(""))
+		chunks, _, err := SplitFileIntoChunks(filePath)
 		expectedChunks := 0
 		if err != nil {
 			t.Fatalf("Failed to split file into chunks: %v", err)
@@ -64,11 +56,9 @@ func TestSplitDataIntoChunks(t *testing.T) {
 		}
 	})
 
-	t.Run("Test SplitDataIntoChunks with file smaller than chunk size returns one chunk", func(t *testing.T) {
-		data := []byte("hello world")
-		filePath := createTestingFile(t, "small.txt", data)
-		fileContent := getTestingFileContent(t, filePath)
-		chunks, _, err := SplitDataIntoChunks(fileContent)
+	t.Run("Test SplitFileIntoChunks with file smaller than chunk size returns one chunk", func(t *testing.T) {
+		filePath := createTestingFile(t, "small.txt", []byte("hello world"))
+		chunks, _, err := SplitFileIntoChunks(filePath)
 		expectedChunks := 1
 		if err != nil {
 			t.Fatalf("Failed to split file into chunks: %v", err)
@@ -79,9 +69,8 @@ func TestSplitDataIntoChunks(t *testing.T) {
 	})
 
 	t.Run("Test SplitFileIntoChunks with file larger than chunk size returns multiple chunks", func(t *testing.T) {
-		filaPath := createTestingFile(t, "big.txt", make([]byte, 3*ChunkSizeBytes))
-		fileContent := getTestingFileContent(t, filaPath)
-		chunks, _, err := SplitDataIntoChunks(fileContent)
+		filaPath := createTestingFile(t, "big.txt", make([]byte, 3 * ChunkSizeBytes))
+		chunks, _, err := SplitFileIntoChunks(filaPath)
 		expectedChunks := 3
 		if err != nil {
 			t.Fatalf("Failed to split file into chunks: %v", err)
@@ -111,3 +100,5 @@ func TestVerifyChunkHash(t *testing.T) {
 		}
 	})
 }
+
+

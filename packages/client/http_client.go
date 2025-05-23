@@ -41,7 +41,7 @@ func (c *HTTPClient) CheckFileExists(fileHash string) (bool, error) {
 		return false, fmt.Errorf("server error: %s", resp.Status)
 	}
 
-	var result FileExistsResponse
+	var result CheckFileResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return false, fmt.Errorf("failed to decode response: %w", err)
 	}
@@ -49,38 +49,38 @@ func (c *HTTPClient) CheckFileExists(fileHash string) (bool, error) {
 	return result.Exists, nil
 }
 
-// checkChunksExists checks if a list of chunks exists on the server and gets missing chunks from server
-func (c *HTTPClient) GetMissingChunks(hashes []string) ([]string, error) {
-	reqBody := MissingChunksRequest{
+// checkChunksExists checks if a list of chunks exists on the server
+func (c *HTTPClient) CheckChunksExists(hashes []string) ([]string, []string, error) {
+	reqBody := CheckChunksRequest{
 		Hashes: hashes,
 	}
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal JSON: %w", err)
+		return nil, nil, fmt.Errorf("failed to marshal JSON: %w", err)
 	}
 
 	resp, err := http.Post(c.serverURL+"/check", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to server: %w", err)
+		return nil, nil, fmt.Errorf("failed to connect to server: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("server error: %s", resp.Status)
+		return nil, nil, fmt.Errorf("server error: %s", resp.Status)
 	}
 
-	var result MissingChunksResponse
+	var result CheckChunksResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	return result.Missing, nil
+	return result.Exists, result.Missing, nil
 
 }
 
 // UploadChunk uploads a chunk to the server
-func (c *HTTPClient) UploadChunk(request ChunkUploadRequest) (*ChunkUploadResponse, error) {
+func (c *HTTPClient) UploadChunk(request UploadRequest) (*UploadResponse, error) {
 	jsonData, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal JSON: %w", err)
@@ -92,7 +92,7 @@ func (c *HTTPClient) UploadChunk(request ChunkUploadRequest) (*ChunkUploadRespon
 	}
 	defer resp.Body.Close()
 
-	var result ChunkUploadResponse
+	var result UploadResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
@@ -104,8 +104,7 @@ func (c *HTTPClient) UploadChunk(request ChunkUploadRequest) (*ChunkUploadRespon
 	return &result, nil
 }
 
-// GetFileChunks gets the chunks hashes for a file from the server
-func (c *HTTPClient) GetFileChunks(fileHash string) (*DownloadFileHashesResponse, error) {
+func (c *HTTPClient) DownloadFile(fileHash string) ([]byte, error) {
 	resp, err := c.httpClient.Get(c.serverURL + "/download/" + fileHash)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to server: %w", err)
@@ -116,32 +115,10 @@ func (c *HTTPClient) GetFileChunks(fileHash string) (*DownloadFileHashesResponse
 		return nil, fmt.Errorf("server error: %s", resp.Status)
 	}
 
-	var result DownloadFileHashesResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &result, nil
-}
-
-// DownloadChunk downloads a chunk's content from the server
-func (c *HTTPClient) DownloadChunk(chunkHash string) ([]byte, error) {
-	resp, err := c.httpClient.Get(c.serverURL + "/chunk/" + chunkHash)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to server: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("server error: %s", resp.Status)
-	}
-
-	chunkContent, err := io.ReadAll(resp.Body)
-
+	fileContent, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	return chunkContent, nil
-
+	return fileContent, nil
 }

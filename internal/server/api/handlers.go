@@ -89,6 +89,7 @@ func (h *Handler) CheckFileHashHandler(c *gin.Context) {
 	c.JSON(200, response)
 }
 
+// CheckChunkHashesHandler checks if chunks exist on the server and returns the missing ones
 func (h *Handler) CheckChunkHashesHandler(c *gin.Context) {
 	var request struct {
 		Hashes []string `json:"hashes" binding:"required"`
@@ -98,14 +99,13 @@ func (h *Handler) CheckChunkHashesHandler(c *gin.Context) {
 		return
 	}
 
-	exists, missing, err := h.storage.CheckChunkExists(request.Hashes)
+	_, missing, err := h.storage.CheckChunkExists(request.Hashes)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
 	response := model.CheckChunksResponse{
-		Exists:  exists,
 		Missing: missing,
 	}
 
