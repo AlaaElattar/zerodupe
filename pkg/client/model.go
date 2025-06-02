@@ -44,3 +44,15 @@ type ChunkDownloadResult struct {
 	content []byte
 	err     error
 }
+
+// AuthResponse represents a response from authentication endpoints
+type AuthResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+// AuthRequest represents a request to authentication endpoints
+type AuthRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}

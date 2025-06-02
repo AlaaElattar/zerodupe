@@ -7,53 +7,147 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"zerodupe/internal/server/auth"
 	"zerodupe/internal/server/model"
 	"zerodupe/internal/server/storage"
 )
 
 type Handler struct {
-	storage storage.Storage
+	fileStorage  storage.FileStorage
+	userStorage  storage.UserStorage
+	tokenHandler *auth.TokenHandler
 }
 
-func NewHandler(storage storage.Storage) *Handler {
+func NewHandler(fileStorage storage.FileStorage, userStorage storage.UserStorage, tokenHandler *auth.TokenHandler) *Handler {
 	return &Handler{
-		storage: storage,
+		fileStorage:  fileStorage,
+		userStorage:  userStorage,
+		tokenHandler: tokenHandler,
 	}
+}
+
+// SignUpHandler handles user signup requests
+func (h *Handler) SignUpHandler(c *gin.Context) {
+	var request model.SignUpRequest
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
+		return
+	}
+
+	// Check if username already exists
+	_, err := h.userStorage.LoginUser(request.Username, request.Password)
+	if err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Username already exists"})
+		return
+	}
+
+	// Create user
+	user := &model.User{
+		Username: request.Username,
+	}
+	err = h.userStorage.CreateUser(user, request.Password)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "User created successfully"})
+}
+
+// LoginHandler handles user login requests
+func (h *Handler) LoginHandler(c *gin.Context) {
+	var request model.LoginRequest
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
+		return
+	}
+
+	user, err := h.userStorage.LoginUser(request.Username, request.Password)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		return
+	}
+
+	// Generate tokens
+	tokenPair, err := h.tokenHandler.CreateTokenPair(user.ID, user.Username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate tokens"})
+		return
+	}
+
+	c.JSON(http.StatusOK, tokenPair)
+}
+
+// RefreshTokenHandler handles token refresh requests
+func (h *Handler) RefreshTokenHandler(c *gin.Context) {
+	var request struct {
+		RefreshToken string `json:"refresh_token" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
+		return
+	}
+
+	accessToken, err := h.tokenHandler.RefreshAccessToken(request.RefreshToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid refresh token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"access_token": accessToken})
 }
 
 // UploadFileHandler handles file upload requests
 func (h *Handler) UploadFileHandler(c *gin.Context) {
 	var request model.UploadRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
+		return
+	}
+
+	// special case: one chunk file, save chunk directly without metadata
+	if request.FileHash == request.ChunkHash {
+		_, err := h.fileStorage.SaveChunkData(request.ChunkHash, request.Content)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save chunk data"})
+			return
+		}
+		response := model.UploadResponse{
+			Message:      "File uploaded successfully",
+			FileHash:     request.FileHash,
+			HashMismatch: false,
+		}
+		c.JSON(http.StatusOK, response)
 		return
 	}
 
 	fmt.Printf("Received chunk: Hash=%s, ChunkOrder=%d\n",
 		request.FileHash, request.ChunkOrder)
 
-	if err := h.storage.SaveChunkMetadata(request.FileHash, request.ChunkHash, request.ChunkOrder); err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+	if err := h.fileStorage.SaveChunkMetadata(request.FileHash, request.ChunkHash, request.ChunkOrder); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save chunk metadata"})
 		return
 	}
 
 	hashMismatch := false
 	if (len(request.Content)) > 0 {
-		calculatedHash, err := h.storage.SaveChunkData(request.ChunkHash, request.Content)
+		calculatedHash, err := h.fileStorage.SaveChunkData(request.ChunkHash, request.Content)
 		if err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save chunk data"})
 			return
 		}
 		hashMismatch = calculatedHash != request.ChunkHash
 	}
 	if (len(request.Content)) == 0 {
-		exists, _, err := h.storage.CheckChunkExists([]string{request.ChunkHash})
+		exists, _, err := h.fileStorage.CheckChunkExists([]string{request.ChunkHash})
 		if err != nil {
-			c.JSON(500, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check chunk existence"})
 			return
 		}
 		if len(exists) == 0 {
-			c.JSON(500, gin.H{"error": "Chunk does not exist"})
+			c.JSON(http.StatusNotFound, gin.H{"error": "Chunk does not exist"})
 			return
 		}
 	}
@@ -75,7 +169,7 @@ func (h *Handler) CheckFileHashHandler(c *gin.Context) {
 		return
 	}
 
-	exists, err := h.storage.CheckFileExists(fileHash)
+	exists, err := h.fileStorage.CheckFileExists(fileHash)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
@@ -99,7 +193,7 @@ func (h *Handler) CheckChunkHashesHandler(c *gin.Context) {
 		return
 	}
 
-	_, missing, err := h.storage.CheckChunkExists(request.Hashes)
+	_, missing, err := h.fileStorage.CheckChunkExists(request.Hashes)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
@@ -117,10 +211,23 @@ func (h *Handler) DownloadFileHandler(c *gin.Context) {
 	fileHash := c.Param("hash")
 
 	fmt.Println("Downloading file with hash: " + fileHash)
-	metadata, err := h.storage.GetFileMetadata(fileHash)
+	metadata, err := h.fileStorage.GetFileMetadata(fileHash)
 
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		// If file metadata not found, check if it's a single chunk file
+		_, err := h.fileStorage.GetChunkData(fileHash)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		result := model.DownloadFileResponse{
+			FileHash:    fileHash,
+			ChunkHashes: []string{fileHash},
+			ChunksCount: 1,
+		}
+		c.JSON(http.StatusOK, result)
+
 		return
 	}
 
@@ -146,7 +253,7 @@ func (h *Handler) DownloadFileHandler(c *gin.Context) {
 
 func (h *Handler) GetChunkContent(c *gin.Context) {
 	chunkHash := c.Param("hash")
-	content, err := h.storage.GetChunkData(chunkHash)
+	content, err := h.fileStorage.GetChunkData(chunkHash)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return

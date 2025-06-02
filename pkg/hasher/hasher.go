@@ -47,6 +47,11 @@ func SplitDataIntoChunks(data []byte) ([]FileChunk, string, error) {
 		})
 	}
 
+	// special case for single chunk files
+	if len(chunks) == 1 {
+		return chunks, chunks[0].ChunkHash, nil
+	}
+
 	fileHash := hex.EncodeToString(fileHasher.Sum(nil))
 	return chunks, fileHash, nil
 }

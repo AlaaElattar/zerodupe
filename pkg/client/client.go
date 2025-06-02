@@ -12,18 +12,28 @@ type Client struct {
 	checker    *FileChecker
 	uploader   *ChunkUploader
 	downloader *ChunkDownloader
+	token      string
 }
 
 // NewClient creates a new client
-func NewClient(serverURL string) *Client {
-	httpClient := NewHTTPClient(serverURL, 30*time.Second)
+func NewClient(serverURL string, token string) *Client {
+	httpClient := NewHTTPClient(serverURL, 30*time.Second, token)
+	httpClient.SetToken(token) 
 
 	return &Client{
 		api:        httpClient,
 		checker:    NewFileChecker(httpClient),
 		uploader:   NewUploader(httpClient),
 		downloader: NewDownloader(httpClient),
+		token:      token,
 	}
+}
+
+// SetToken updates the client's authentication token
+func (client *Client) SetToken(token string) {
+	fmt.Printf("DEBUG: Setting token in Client: %s\n", token)
+	client.token = token
+	client.api.SetToken(token)
 }
 
 // UploadFile uploads a file to the server
@@ -92,12 +102,23 @@ func (client *Client) DownloadFile(fileHash string, outputDir string, fileName s
 
 	fmt.Printf("File exists on server. Downloading...\n")
 
+	var response *DownloadFileHashesResponse
 	hashes, err := client.api.GetFileChunks(fileHash)
 	if err != nil {
 		return err
 	}
 
-	content, err := client.downloader.DownloadChunks(hashes)
+	if hashes.ChunksCount == 0 {
+		response = &DownloadFileHashesResponse{
+			FileHash:    fileHash,
+			ChunkHashes: []string{fileHash},
+			ChunksCount: 1,
+		}
+	} else {
+		response = hashes
+	}
+
+	content, err := client.downloader.DownloadChunks(response)
 	if err != nil {
 		return err
 	}
@@ -108,4 +129,19 @@ func (client *Client) DownloadFile(fileHash string, outputDir string, fileName s
 	}
 
 	return nil
+}
+
+// Signup creates a new user account
+func (client *Client) Signup(username, password string) (*AuthResponse, error) {
+	return client.api.Signup(username, password)
+}
+
+// Login authenticates a user and returns access and refresh tokens
+func (client *Client) Login(username, password string) (*AuthResponse, error) {
+	return client.api.Login(username, password)
+}
+
+// RefreshToken refreshes the access token using a refresh token
+func (client *Client) RefreshToken(refreshToken string) (*AuthResponse, error) {
+	return client.api.RefreshToken(refreshToken)
 }

@@ -4,8 +4,8 @@ import (
 	"zerodupe/internal/server/model"
 )
 
-// Storage defines the interface for storage operations
-type Storage interface {
+// FileStorage defines the interface for storage operations
+type FileStorage interface {
 	// CheckFileExists checks if a file exists
 	CheckFileExists(fileHash string) (bool, error)
 

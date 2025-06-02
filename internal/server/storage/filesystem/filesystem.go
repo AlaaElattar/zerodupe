@@ -36,8 +36,17 @@ func NewFilesystemStorage(storageDir string) (*FilesystemStorage, error) {
 
 // CheckFileExists checks if a file exists
 func (fs *FilesystemStorage) CheckFileExists(fileHash string) (bool, error) {
+	// First check metadata
 	metaPath := filepath.Join(fs.storageDir, "meta", fileHash[:4], fileHash)
 	if _, err := os.Stat(metaPath); err == nil {
+		return true, nil
+	} else if !os.IsNotExist(err) {
+		return false, err
+	}
+
+	// If no metadata, check if it's a single chunk file
+	blockPath := filepath.Join(fs.storageDir, "blocks", fileHash[:4], fileHash)
+	if _, err := os.Stat(blockPath); err == nil {
 		return true, nil
 	} else if !os.IsNotExist(err) {
 		return false, err
@@ -179,5 +188,6 @@ func (fs *FilesystemStorage) GetChunkData(chunkHash string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to read chunk data: %w", err)
 	}
 
+	fmt.Printf("DEBUG: Read chunk %s, size: %d bytes\n", chunkHash, len(content))
 	return content, nil
 }

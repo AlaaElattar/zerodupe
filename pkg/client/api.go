@@ -1,6 +1,14 @@
 package client
 
 type API interface {
+	// Authentication methods
+	Signup(username, password string) (*AuthResponse, error)
+	Login(username, password string) (*AuthResponse, error)
+	RefreshToken(refreshToken string) (*AuthResponse, error)
+
+	// SetToken updates the authentication token
+	SetToken(token string)
+
 	// CheckFileExists checks if a file exists on the server
 	CheckFileExists(fileHash string) (bool, error)
 

@@ -39,6 +39,20 @@ type CheckChunksResponse struct {
 
 type DownloadFileResponse struct {
 	FileHash    string   `json:"filehash" binding:"required"`
-	ChunkHashes []string `json:chunk_hashes`
-	ChunksCount int      `json:chunks_count`
+	ChunkHashes []string `json:"chunk_hashes"`
+	ChunksCount int      `json:"chunks_count"`
 }
+
+type LoginRequest struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
+type SignUpRequest struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
+// type LoginRequest struct {
+// 	Token string `json:"token"`
+// }
