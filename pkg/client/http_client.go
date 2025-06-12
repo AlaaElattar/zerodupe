@@ -18,17 +18,12 @@ type HTTPClient struct {
 }
 
 // NewHTTPClient creates a new HTTP client
-func NewHTTPClient(serverURL string, timeout time.Duration, token string) *HTTPClient {
-	if timeout == 0 {
-		timeout = 30 * time.Second
-	}
-
+func NewHTTPClient(serverURL string, timeout time.Duration) *HTTPClient {
 	return &HTTPClient{
 		serverURL: serverURL,
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
-		token: token,
 	}
 }
 
@@ -61,11 +56,9 @@ func (c *HTTPClient) Signup(username, password string) (*AuthResponse, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("unauthorized: invalid credentials")
-	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("server error: %s", resp.Status)
+		bodyBytes, _ := io.ReadAll(resp.Body)
+        return nil, fmt.Errorf("server error: %s - %s", resp.Status, string(bodyBytes))
 	}
 
 	var result AuthResponse
@@ -161,7 +154,6 @@ func (c *HTTPClient) addAuthHeader(req *http.Request) {
 		if !strings.HasPrefix(token, "Bearer ") {
 			token = "Bearer " + token
 		}
-		fmt.Printf("DEBUG: Adding Authorization header: %s\n", token)
 		req.Header.Add("Authorization", token)
 	} else {
 		fmt.Printf("DEBUG: No token available for request\n")

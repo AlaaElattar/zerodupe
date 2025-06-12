@@ -12,6 +12,7 @@ import (
 	"zerodupe/internal/server/storage"
 )
 
+// Handler handles all API requests
 type Handler struct {
 	fileStorage  storage.FileStorage
 	userStorage  storage.UserStorage
@@ -52,7 +53,21 @@ func (h *Handler) SignUpHandler(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "User created successfully"})
+	// Login users and get tokens
+	user, err = h.userStorage.LoginUser(request.Username, request.Password)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to login user"})
+		return
+	}
+
+	// Generate tokens
+	tokenPair, err := h.tokenHandler.CreateTokenPair(user.ID, user.Username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate tokens"})
+		return
+	}
+
+	c.JSON(http.StatusOK, tokenPair)
 }
 
 // LoginHandler handles user login requests
@@ -161,6 +176,7 @@ func (h *Handler) UploadFileHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// CheckFileHashHandler checks if a file exists on the server
 func (h *Handler) CheckFileHashHandler(c *gin.Context) {
 	fileHash := c.Param("filehash")
 
@@ -251,6 +267,7 @@ func (h *Handler) DownloadFileHandler(c *gin.Context) {
 
 }
 
+// GetChunkContent returns the content of a chunk
 func (h *Handler) GetChunkContent(c *gin.Context) {
 	chunkHash := c.Param("hash")
 	content, err := h.fileStorage.GetChunkData(chunkHash)

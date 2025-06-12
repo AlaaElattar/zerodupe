@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// DB struct holds the database connection
+// SqliteStorage implements the UserStorage interface using SQLite
 type Sqlite struct {
 	db    *gorm.DB
 	mutex sync.Mutex
@@ -39,6 +39,7 @@ func (s *Sqlite) Close() error {
 	return sqlDB.Close()
 }
 
+// CreateUser creates a new user
 func (s *Sqlite) CreateUser(user *model.User, plainPassword string) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -56,11 +57,12 @@ func (s *Sqlite) CreateUser(user *model.User, plainPassword string) error {
 
 }
 
+// LoginUser logs in a user
 func (s *Sqlite) LoginUser(username, password string) (*model.User, error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	user, err := s.getUserByUsername(username)
+	user, err := s.GetUserByUsername(username)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +76,8 @@ func (s *Sqlite) LoginUser(username, password string) (*model.User, error) {
 
 }
 
-func (s *Sqlite) getUserByUsername(username string) (*model.User, error) {
+// GetUserByUsername gets a user by username
+func (s *Sqlite) GetUserByUsername(username string) (*model.User, error) {
 	var user model.User
 	err := s.db.Where("username = ?", username).First(&user).Error
 	if err != nil {

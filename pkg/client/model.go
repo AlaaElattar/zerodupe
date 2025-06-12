@@ -34,8 +34,8 @@ type MissingChunksResponse struct {
 
 type DownloadFileHashesResponse struct {
 	FileHash    string   `json:"filehash" binding:"required"`
-	ChunkHashes []string `json:chunk_hashes`
-	ChunksCount int      `json:chunks_count`
+	ChunkHashes []string `json:"chunk_hashes"`
+	ChunksCount int      `json:"chunks_count"`
 }
 
 // ChunkDownloadResult represents the result of downloading a chunk

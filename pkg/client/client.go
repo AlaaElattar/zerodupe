@@ -2,6 +2,7 @@ package client
 
 import (
 	"fmt"
+	"strings"
 	"time"
 	"zerodupe/pkg/hasher"
 )
@@ -12,28 +13,52 @@ type Client struct {
 	checker    *FileChecker
 	uploader   *ChunkUploader
 	downloader *ChunkDownloader
-	token      string
+	accessToken      string
+	refreshToken 	string
 }
 
 // NewClient creates a new client
-func NewClient(serverURL string, token string) *Client {
-	httpClient := NewHTTPClient(serverURL, 30*time.Second, token)
-	httpClient.SetToken(token) 
+func NewClient(serverURL string) *Client {
+	httpClient := NewHTTPClient(serverURL, 30*time.Minute)
 
 	return &Client{
 		api:        httpClient,
 		checker:    NewFileChecker(httpClient),
 		uploader:   NewUploader(httpClient),
 		downloader: NewDownloader(httpClient),
-		token:      token,
 	}
 }
 
-// SetToken updates the client's authentication token
-func (client *Client) SetToken(token string) {
-	fmt.Printf("DEBUG: Setting token in Client: %s\n", token)
-	client.token = token
-	client.api.SetToken(token)
+// SetTokens updates the client's authentication tokens
+func (client *Client) SetTokens(accessToken, refreshToken string) {
+	client.accessToken = accessToken
+	client.refreshToken = refreshToken
+	client.api.SetToken(accessToken)
+}
+
+
+// ExecuteWithAuth executes a function with authentication
+func (client *Client) ExecuteWithAuth(fn func() error) error {    
+    err := fn()
+    
+    // If we get an auth error, try refreshing once and retry
+    if err != nil && strings.Contains(err.Error(), "unauthorized") {
+        if client.refreshToken == "" {
+            return err
+        }
+        
+        // Try to refresh the token
+        resp, refreshErr := client.RefreshToken(client.refreshToken)
+        if refreshErr != nil {
+            return err
+        }
+        
+        // Update tokens and retry
+        client.SetTokens(resp.AccessToken, resp.RefreshToken)
+        return fn()
+    }
+    
+    return err
 }
 
 // UploadFile uploads a file to the server

@@ -52,6 +52,7 @@ func (h *TokenHandler) CreateTokenPair(userID uint, username string) (*TokenPair
 
 }
 
+// VerifyToken verifies the token and returns the claims
 func (h *TokenHandler) VerifyToken(tokenString string) (*TokenClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return h.secretKey, nil
@@ -72,6 +73,7 @@ func (h *TokenHandler) VerifyToken(tokenString string) (*TokenClaims, error) {
 	return claims, nil
 }
 
+// createAccessToken generates a new access token
 func (h *TokenHandler) createAccessToken(userID uint, username string) (string, error) {
 	claims := TokenClaims{
 		Username: username,
@@ -89,6 +91,7 @@ func (h *TokenHandler) createAccessToken(userID uint, username string) (string, 
 	return tokenString, nil
 }
 
+// createRefreshToken generates a new refresh token
 func (h *TokenHandler) createRefreshToken(userID uint, username string) (string, error) {
 	claims := TokenClaims{
 		Username: username,
@@ -106,6 +109,7 @@ func (h *TokenHandler) createRefreshToken(userID uint, username string) (string,
 	return tokenString, nil
 }
 
+// RefreshAccessToken refreshes the access token using a refresh token
 func (h *TokenHandler) RefreshAccessToken(refreshToken string) (string, error) {
 	claims, err := h.VerifyToken(refreshToken)
 	if err != nil {

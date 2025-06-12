@@ -37,10 +37,12 @@ func main() {
 	uploadCmd := flag.NewFlagSet("upload", flag.ExitOnError)
 	uploadServerURL := uploadCmd.String("server", "http://localhost:8080", "Server URL")
 	uploadToken := uploadCmd.String("token", "", "JWT authentication token")
+	uploadRefreshToken := uploadCmd.String("refresh-token", "", "Refresh token")
 
 	downloadCmd := flag.NewFlagSet("download", flag.ExitOnError)
 	downloadServerURL := downloadCmd.String("server", "http://localhost:8080", "Server URL")
 	downloadToken := downloadCmd.String("token", "", "JWT authentication token")
+	downloadRefreshToken := downloadCmd.String("refresh-token", "", "Refresh token")
 	downloadOutput := downloadCmd.String("o", ".", "Output directory")
 	downloadFileName := downloadCmd.String("n", "", "Output file name (default: file hash)")
 
@@ -89,7 +91,7 @@ func main() {
 			os.Exit(1)
 		}
 		filePath := uploadCmd.Arg(0)
-		uploadFile(*uploadServerURL, *uploadToken, filePath)
+		uploadFile(*uploadServerURL, *uploadToken, *uploadRefreshToken, filePath)
 
 	case "download":
 		downloadCmd.Parse(os.Args[2:])
@@ -100,7 +102,7 @@ func main() {
 			os.Exit(1)
 		}
 		fileHash := downloadCmd.Arg(0)
-		downloadFile(*downloadServerURL, *downloadToken, fileHash, *downloadOutput, *downloadFileName)
+		downloadFile(*downloadServerURL, *downloadToken, *downloadRefreshToken, fileHash, *downloadOutput, *downloadFileName)
 
 	default:
 		printUsage()
@@ -140,11 +142,13 @@ func printUsage() {
 func signup(serverURL, username, password string) {
 	fmt.Printf("Creating account for user %s\n", username)
 
-	client := client.NewClient(serverURL, "")
+	client := client.NewClient(serverURL)
 	resp, err := client.Signup(username, password)
 	if err != nil {
 		log.Fatalf("Failed to signup: %v", err)
 	}
+
+	client.SetTokens(resp.AccessToken, resp.RefreshToken)
 
 	fmt.Printf("Account created successfully\n")
 	fmt.Printf("Access token: %s\n", resp.AccessToken)
@@ -155,11 +159,13 @@ func signup(serverURL, username, password string) {
 func login(serverURL, username, password string) {
 	fmt.Printf("Logging in user %s\n", username)
 
-	client := client.NewClient(serverURL, "")
+	client := client.NewClient(serverURL)
 	resp, err := client.Login(username, password)
 	if err != nil {
 		log.Fatalf("Failed to login: %v", err)
 	}
+
+	client.SetTokens(resp.AccessToken, resp.RefreshToken)
 
 	fmt.Printf("Login successful\n")
 	fmt.Printf("Access token: %s\n", resp.AccessToken)
@@ -170,7 +176,7 @@ func login(serverURL, username, password string) {
 func refresh(serverURL, refreshToken string) {
 	fmt.Println("Refreshing access token")
 
-	client := client.NewClient(serverURL, "")
+	client := client.NewClient(serverURL)
 	resp, err := client.RefreshToken(refreshToken)
 	if err != nil {
 		log.Fatalf("Failed to refresh token: %v", err)
@@ -182,26 +188,33 @@ func refresh(serverURL, refreshToken string) {
 }
 
 // uploadFile uploads a file to the server
-func uploadFile(serverURL, token, filePath string) {
+func uploadFile(serverURL, accessToken, refreshToken, filePath string) {
 	fmt.Printf("Uploading file %s to %s\n", filePath, serverURL)
 
 	// Initialize client
-	client := client.NewClient(serverURL, token)
+	client := client.NewClient(serverURL)
+	client.SetTokens(accessToken, refreshToken)
 
 	// Upload file
-	err := client.UploadFile(filePath)
+	err := client.ExecuteWithAuth(func() error {
+		return client.UploadFile(filePath)
+	})
 	if err != nil {
 		log.Fatalf("Failed to upload file: %v", err)
 	}
 }
 
 // downloadFile downloads a file from the server
-func downloadFile(serverURL, token, fileHash, outputDir, fileName string) {
+func downloadFile(serverURL, accessToken, refreshToken, fileHash, outputDir, fileName string) {
 	fmt.Printf("Downloading file with hash %s from %s\n", fileHash, serverURL)
 
-	client := client.NewClient(serverURL, token)
+	client := client.NewClient(serverURL)
 
-	err := client.DownloadFile(fileHash, outputDir, fileName)
+	client.SetTokens(accessToken, refreshToken)
+
+	err := client.ExecuteWithAuth(func() error {
+		return client.DownloadFile(fileHash, outputDir, fileName)
+	})
 	if err != nil {
 		log.Fatalf("Failed to download file: %v", err)
 	}

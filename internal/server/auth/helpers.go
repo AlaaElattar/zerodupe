@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 )
 
+// GenerateSalt generates a random salt for password hashing
 func GenerateSalt() (string, error) {
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {
@@ -14,6 +15,7 @@ func GenerateSalt() (string, error) {
 	return base64.StdEncoding.EncodeToString(salt), nil
 }
 
+// HashPassword hashes a password with a given salt
 func HashPassword(password, salt string) string {
 	hash := sha256.Sum256([]byte(password + salt))
 	return base64.StdEncoding.EncodeToString(hash[:])
