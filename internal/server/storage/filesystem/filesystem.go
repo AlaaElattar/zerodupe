@@ -34,7 +34,7 @@ func NewFilesystemStorage(storageDir string) (*FilesystemStorage, error) {
 	}, nil
 }
 
-// CheckFileExists checks if a file exists
+// CheckFileExists checks if a file exists in meta or blocks directory
 func (fs *FilesystemStorage) CheckFileExists(fileHash string) (bool, error) {
 	// First check metadata
 	metaPath := filepath.Join(fs.storageDir, "meta", fileHash[:4], fileHash)
@@ -78,7 +78,7 @@ func (fs *FilesystemStorage) CheckChunkExists(hashes []string) ([]string, []stri
 	return existingChunks, missingChunks, nil
 }
 
-// SaveChunkMetadata saves chunk metadata
+// SaveChunkMetadata saves chunk metadata in json format
 func (fs *FilesystemStorage) SaveChunkMetadata(fileHash, chunkHash string, chunkOrder int) error {
 	// Ensure directory exists
 	metaDir := filepath.Join(fs.storageDir, "meta", fileHash[:4])
