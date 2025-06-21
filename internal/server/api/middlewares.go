@@ -10,7 +10,7 @@ import (
 )
 
 // AuthMiddleware creates a middleware that validates JWT tokens
-func AuthMiddleware(tokenHandler *auth.TokenHandler) gin.HandlerFunc {
+func AuthMiddleware(tokenHandler auth.TokenManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {

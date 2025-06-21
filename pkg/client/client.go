@@ -9,12 +9,12 @@ import (
 
 // Client represents a client that uploads files to the server
 type Client struct {
-	api        API
-	checker    *FileChecker
-	uploader   *ChunkUploader
-	downloader *ChunkDownloader
-	accessToken      string
-	refreshToken 	string
+	api          API
+	checker      *FileChecker
+	uploader     *ChunkUploader
+	downloader   *ChunkDownloader
+	accessToken  string
+	refreshToken string
 }
 
 // NewClient creates a new client
@@ -36,29 +36,28 @@ func (client *Client) SetTokens(accessToken, refreshToken string) {
 	client.api.SetToken(accessToken)
 }
 
-
 // ExecuteWithAuth executes a function with authentication
-func (client *Client) ExecuteWithAuth(fn func() error) error {    
-    err := fn()
-    
-    // If we get an auth error, try refreshing once and retry
-    if err != nil && strings.Contains(err.Error(), "unauthorized") {
-        if client.refreshToken == "" {
-            return err
-        }
-        
-        // Try to refresh the token
-        resp, refreshErr := client.RefreshToken(client.refreshToken)
-        if refreshErr != nil {
-            return err
-        }
-        
-        // Update tokens and retry
-        client.SetTokens(resp.AccessToken, resp.RefreshToken)
-        return fn()
-    }
-    
-    return err
+func (client *Client) ExecuteWithAuth(fn func() error) error {
+	err := fn()
+
+	// If we get an auth error, try refreshing once and retry
+	if err != nil && strings.Contains(err.Error(), "unauthorized") {
+		if client.refreshToken == "" {
+			return err
+		}
+
+		// Try to refresh the token
+		resp, refreshErr := client.RefreshToken(client.refreshToken)
+		if refreshErr != nil {
+			return err
+		}
+
+		// Update tokens and retry
+		client.SetTokens(resp.AccessToken, resp.RefreshToken)
+		return fn()
+	}
+
+	return err
 }
 
 // UploadFile uploads a file to the server

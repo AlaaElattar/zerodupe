@@ -12,7 +12,7 @@ type SqliteMock struct {
 	users map[string]*model.User
 }
 
-func NewSqliteStorageMock() (*SqliteMock) {
+func NewSqliteStorageMock() *SqliteMock {
 	return &SqliteMock{
 		users: make(map[string]*model.User),
 	}
@@ -59,7 +59,7 @@ func (s *SqliteMock) LoginUser(username, password string) (*model.User, error) {
 }
 
 // GetUserByUsername gets a user by username from the mock storage
-func(s *SqliteMock) GetUserByUsername(username string) (*model.User, error) {
+func (s *SqliteMock) GetUserByUsername(username string) (*model.User, error) {
 	user, exists := s.users[username]
 	if !exists {
 		return nil, gorm.ErrRecordNotFound

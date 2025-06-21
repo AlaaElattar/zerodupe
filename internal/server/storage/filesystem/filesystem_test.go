@@ -276,7 +276,7 @@ func TestSaveChunkMetadata(t *testing.T) {
 		err = json.Unmarshal(content, &metadata)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(metadata.Chunks))
-		
+
 	})
 
 	t.Run("Test SaveChunkMetadata for existing chunk with different order", func(t *testing.T) {

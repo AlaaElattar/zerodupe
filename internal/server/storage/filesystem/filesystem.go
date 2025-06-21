@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"zerodupe/internal/server/model"
 	"zerodupe/pkg/hasher"
+
+	"github.com/juju/fslock"
+	"github.com/rs/zerolog/log"
 )
 
 // FilesystemStorage implements the Storage interface using the filesystem
@@ -87,6 +90,15 @@ func (fs *FilesystemStorage) SaveChunkMetadata(fileHash, chunkHash string, chunk
 	}
 
 	metaPath := filepath.Join(metaDir, fileHash)
+	fileLock := fslock.New(metaPath)
+
+	lockErr := fileLock.TryLock()
+	if lockErr != nil {
+		log.Error().Err(lockErr).Msg("Failed to acquire lock")
+		return lockErr
+	}
+	defer fileLock.Unlock()
+
 
 	var metadata model.FileMetadata
 	if _, err := os.Stat(metaPath); err == nil {
@@ -106,7 +118,7 @@ func (fs *FilesystemStorage) SaveChunkMetadata(fileHash, chunkHash string, chunk
 		}
 	}
 
-	metadata.Chunks = append(metadata.Chunks, model.ChunkMetadataRequest{
+	metadata.Chunks = append(metadata.Chunks, model.ChunkMetadata{
 		ChunkOrder: chunkOrder,
 		ChunkHash:  chunkHash,
 	})
@@ -143,7 +155,7 @@ func (fs *FilesystemStorage) SaveChunkData(chunkHash string, content []byte) (st
 	// Verify chunk hash
 	isValid, calculatedHash := hasher.VerifyChunkHash(content, chunkHash)
 	if !isValid {
-		fmt.Printf("WARNING: Hash mismatch. Expected: %s, Got: %s\n", chunkHash, calculatedHash)
+		log.Warn().Msgf("Hash mismatch. Expected: %s, Got: %s", chunkHash, calculatedHash)
 	}
 
 	// Write chunk data
@@ -187,7 +199,6 @@ func (fs *FilesystemStorage) GetChunkData(chunkHash string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read chunk data: %w", err)
 	}
-
-	fmt.Printf("DEBUG: Read chunk %s, size: %d bytes\n", chunkHash, len(content))
+	log.Debug().Msgf("Read chunk %s, size: %d bytes", chunkHash, len(content))
 	return content, nil
 }

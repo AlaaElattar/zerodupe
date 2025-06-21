@@ -9,7 +9,6 @@ type Config struct {
 	RefreshTokenExpiry int    `json:"refresh_token_expiry"` // in hours
 }
 
-// not to be hard coded
 func NewConfig(port int, storageDir string, jwtSecret string, accessTokenExpiry int, refreshTokenExpiry int) Config {
 	return Config{
 		Port:               port,

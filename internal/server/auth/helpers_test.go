@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-
 func TestGenerateSalt(t *testing.T) {
 	t.Run("Test GenerateSalt generates a random salt", func(t *testing.T) {
 		salt1, err := GenerateSalt()

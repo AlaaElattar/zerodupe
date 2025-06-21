@@ -1,36 +1,75 @@
 package main
 
 import (
+	"context"
 	"flag"
-	"fmt"
-	"log"
+	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
+	"time"
 	"zerodupe/internal/server/api"
 	"zerodupe/internal/server/config"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 func main() {
-	port := flag.Int("port", 8080, "Server port")
-	storageDir := flag.String("storage", "data/storage", "Storage directory")
-	jwtSercet := flag.String("secret", "secret", "JWT Secret")
-	accessTokenExpiry := flag.Int("Access Token Expiry", 15, "Access Token Expiry date in minutes")
-	refreshTokenExpiry := flag.Int("Refresh Token Expiry", 24, "Refresh Token Expiry date in hours")
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+
+	var serverConfig config.Config
+
+	flag.IntVar(&serverConfig.Port, "port", 8080, "Server port")
+	flag.StringVar(&serverConfig.StorageDir, "storage", "data/storage", "Storage directory")
+	flag.StringVar(&serverConfig.JWTSecret, "secret", "", "JWT Secret")
+	flag.IntVar(&serverConfig.AccessTokenExpiry, "access-token-expiry", 15, "Access Token Expiry date in minutes")
+	flag.IntVar(&serverConfig.RefreshTokenExpiry, "refresh-token-expiry", 24, "Refresh Token Expiry date in hours")
 	flag.Parse()
 
-	config := config.NewConfig(*port, *storageDir, *jwtSercet, *accessTokenExpiry, *refreshTokenExpiry)
-
-	if err := os.MkdirAll(*storageDir, 0755); err != nil {
-		log.Fatalf("Failed to create storage directory: %v", err)
+	if serverConfig.JWTSecret == "" {
+		// Generate a random secret if not provided
+		const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+		secret := make([]byte, 32)
+		for i := range secret {
+			secret[i] = charset[time.Now().UnixNano()%int64(len(charset))]
+		}
+		serverConfig.JWTSecret = string(secret)
+		log.Warn().Msg("No JWT secret provided. Generated a random secret. This is not secure for production use.")
 	}
 
-	server, err := api.NewServer(config)
+	if err := os.MkdirAll(serverConfig.StorageDir, 0755); err != nil {
+		log.Error().Err(err).Msg("Failed to create storage directory")
+	}
+
+	server, err := api.NewServer(serverConfig)
 	if err != nil {
-		log.Fatalf("Error creating server: %v", err)
+		log.Fatal().Err(err).Msg("Error creating server")
 	}
 
-	fmt.Printf("Starting ZeroDupe server on port %d...\n", config.Port)
-	fmt.Printf("Storage directory: %s\n", filepath.Clean(config.StorageDir))
+	// Graceful shutdown
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
-	server.Run()
+	go func() {
+		log.Info().Int("port", serverConfig.Port).Msg("Starting ZeroDupe server")
+		log.Info().Str("path", filepath.Clean(serverConfig.StorageDir)).Msg("Storage directory")
+
+		if err := server.Run(); err != nil && err != http.ErrServerClosed {
+			log.Error().Err(err).Msg("Failed to start server")
+		}
+	}()
+
+	<-ctx.Done()
+	log.Info().Msg("Shutting down server...")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Shutdown server
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Error().Err(err).Msg("Server shutdown failed")
+	}
+
+	log.Info().Msg("Server gracefully stopped.")
 }

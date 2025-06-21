@@ -27,6 +27,13 @@ type TokenClaims struct {
 	UserID   uint   `json:"user_id"`
 }
 
+// TokenManager defines the interface for token operations.
+type TokenManager interface {
+	CreateTokenPair(userID uint, username string) (*TokenPair, error)
+	VerifyToken(tokenString string) (*TokenClaims, error)
+	RefreshAccessToken(refreshToken string) (string, error)
+}
+
 func NewTokenHandler(secretKey string, accessExpiry, refreshExpiry time.Duration) *TokenHandler {
 	return &TokenHandler{
 		secretKey:     []byte(secretKey),
@@ -49,7 +56,6 @@ func (h *TokenHandler) CreateTokenPair(userID uint, username string) (*TokenPair
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}, nil
-
 }
 
 // VerifyToken verifies the token and returns the claims

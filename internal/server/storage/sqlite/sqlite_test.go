@@ -51,8 +51,7 @@ func TestCreateUser(t *testing.T) {
 	})
 }
 
-
-func TestLoginUser(t *testing.T){
+func TestLoginUser(t *testing.T) {
 	t.Run("Test LoginUser returns user for correct credentials", func(t *testing.T) {
 		sqliteStorage := NewSqliteStorageMock()
 		user := &model.User{

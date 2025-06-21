@@ -58,7 +58,7 @@ func (c *HTTPClient) Signup(username, password string) (*AuthResponse, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-        return nil, fmt.Errorf("server error: %s - %s", resp.Status, string(bodyBytes))
+		return nil, fmt.Errorf("server error: %s - %s", resp.Status, string(bodyBytes))
 	}
 
 	var result AuthResponse

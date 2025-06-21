@@ -1,7 +1,7 @@
 package api
 
 import (
-	"fmt"
+	"log"
 	"net/http"
 	"sort"
 
@@ -16,10 +16,10 @@ import (
 type Handler struct {
 	fileStorage  storage.FileStorage
 	userStorage  storage.UserStorage
-	tokenHandler *auth.TokenHandler
+	tokenHandler auth.TokenManager
 }
 
-func NewHandler(fileStorage storage.FileStorage, userStorage storage.UserStorage, tokenHandler *auth.TokenHandler) *Handler {
+func NewHandler(fileStorage storage.FileStorage, userStorage storage.UserStorage, tokenHandler auth.TokenManager) *Handler {
 	return &Handler{
 		fileStorage:  fileStorage,
 		userStorage:  userStorage,
@@ -29,7 +29,7 @@ func NewHandler(fileStorage storage.FileStorage, userStorage storage.UserStorage
 
 // SignUpHandler handles user signup requests
 func (h *Handler) SignUpHandler(c *gin.Context) {
-	var request model.SignUpRequest
+	var request model.AuthRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
@@ -72,7 +72,7 @@ func (h *Handler) SignUpHandler(c *gin.Context) {
 
 // LoginHandler handles user login requests
 func (h *Handler) LoginHandler(c *gin.Context) {
-	var request model.LoginRequest
+	var request model.AuthRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
@@ -138,7 +138,7 @@ func (h *Handler) UploadFileHandler(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("Received chunk: Hash=%s, ChunkOrder=%d\n",
+	log.Printf("Received chunk: Hash=%s, ChunkOrder=%d\n",
 		request.FileHash, request.ChunkOrder)
 
 	if err := h.fileStorage.SaveChunkMetadata(request.FileHash, request.ChunkHash, request.ChunkOrder); err != nil {
@@ -181,7 +181,7 @@ func (h *Handler) CheckFileHashHandler(c *gin.Context) {
 	fileHash := c.Param("filehash")
 
 	if len(fileHash) < 4 {
-		c.JSON(400, gin.H{"error": "Invalid file hash"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file hash"})
 		return
 	}
 
@@ -205,7 +205,7 @@ func (h *Handler) CheckChunkHashesHandler(c *gin.Context) {
 		Hashes []string `json:"hashes" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -226,7 +226,7 @@ func (h *Handler) CheckChunkHashesHandler(c *gin.Context) {
 func (h *Handler) DownloadFileHandler(c *gin.Context) {
 	fileHash := c.Param("hash")
 
-	fmt.Println("Downloading file with hash: " + fileHash)
+	log.Println("Downloading file with hash: " + fileHash)
 	metadata, err := h.fileStorage.GetFileMetadata(fileHash)
 
 	if err != nil {
