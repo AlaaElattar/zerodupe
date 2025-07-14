@@ -1,22 +1,32 @@
 package auth
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
+	"io"
 )
 
-// GenerateSalt generates a random salt for password hashing
-func GenerateSalt() (string, error) {
-	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
-		return "", err
+var saltLen = 5
+
+// HashAndSaltPassword hashes given password and append salt to it
+func HashAndSaltPassword(password []byte) ([]byte, error) {
+	salt := make([]byte, saltLen)
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
+		return []byte{}, err
 	}
-	return base64.StdEncoding.EncodeToString(salt), nil
+
+	hashedPassword := sha256.Sum256(append(salt, password...))
+	return append(salt, hashedPassword[:]...), nil
 }
 
-// HashPassword hashes a password with a given salt
-func HashPassword(password, salt string) string {
-	hash := sha256.Sum256([]byte(password + salt))
-	return base64.StdEncoding.EncodeToString(hash[:])
+// VerifyPassword checks if given password is same as hashed one
+func VerifyPassword(hashedPassword []byte, password string) bool {
+	hashedPasswordCopy := make([]byte, len(hashedPassword))
+
+	copy(hashedPasswordCopy, hashedPassword)
+	salt := hashedPasswordCopy[:saltLen]
+
+	checkedPass := sha256.Sum256(append(salt, []byte(password)...))
+	return bytes.Equal(append(salt, checkedPass[:]...), hashedPassword)
 }

@@ -45,17 +45,9 @@ type MockUserStorage struct {
 	mock.Mock
 }
 
-func (m *MockUserStorage) CreateUser(user *model.User, plainPassword string) error {
-	args := m.Called(user, plainPassword)
+func (m *MockUserStorage) CreateUser(user *model.User) error {
+	args := m.Called(user)
 	return args.Error(0)
-}
-
-func (m *MockUserStorage) LoginUser(username, password string) (*model.User, error) {
-	args := m.Called(username, password)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*model.User), args.Error(1)
 }
 
 func (m *MockUserStorage) GetUserByUsername(username string) (*model.User, error) {

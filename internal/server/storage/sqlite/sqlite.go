@@ -1,8 +1,6 @@
 package sqlite
 
 import (
-	"sync"
-	"zerodupe/internal/server/auth"
 	"zerodupe/internal/server/model"
 
 	"gorm.io/driver/sqlite"
@@ -11,8 +9,7 @@ import (
 
 // SqliteStorage implements the UserStorage interface using SQLite
 type Sqlite struct {
-	db    *gorm.DB
-	mutex sync.Mutex
+	db *gorm.DB
 }
 
 // NewSqliteStorage connects to the database file
@@ -40,39 +37,8 @@ func (s *Sqlite) Close() error {
 }
 
 // CreateUser creates a new user
-func (s *Sqlite) CreateUser(user *model.User, plainPassword string) error {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	salt, err := auth.GenerateSalt()
-	if err != nil {
-		return err
-	}
-
-	hashed := auth.HashPassword(plainPassword, salt)
-	user.Password = hashed
-	user.Salt = salt
-
+func (s *Sqlite) CreateUser(user *model.User) error {
 	return s.db.Create(user).Error
-
-}
-
-// LoginUser logs in a user
-func (s *Sqlite) LoginUser(username, password string) (*model.User, error) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	user, err := s.GetUserByUsername(username)
-	if err != nil {
-		return nil, err
-	}
-
-	hashedPassword := auth.HashPassword(password, user.Salt)
-	if hashedPassword != user.Password {
-		return nil, gorm.ErrRecordNotFound
-	}
-
-	return user, nil
 
 }
 

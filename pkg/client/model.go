@@ -2,8 +2,8 @@ package client
 
 // ChunkUploadRequest represents a request to upload a chunk to the server
 type ChunkUploadRequest struct {
-	FileHash   string `json:"filehash" binding:"required"`
-	ChunkHash  string `json:"chunkhash" binding:"required"`
+	FileHash   string `json:"file_hash" binding:"required"`
+	ChunkHash  string `json:"chunk_hash" binding:"required"`
 	ChunkOrder int    `json:"chunk_order" binding:"required"`
 	Content    []byte `json:"content"`
 }
@@ -55,4 +55,10 @@ type AuthResponse struct {
 type AuthRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+}
+
+type SignUpRequest struct {
+	Username        string `json:"username"`
+	Password        string `json:"password"`
+	ConfirmPassword string `json:"confirm_password"`
 }

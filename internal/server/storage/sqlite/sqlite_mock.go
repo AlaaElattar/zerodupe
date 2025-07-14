@@ -1,7 +1,6 @@
 package sqlite
 
 import (
-	"zerodupe/internal/server/auth"
 	"zerodupe/internal/server/model"
 
 	"gorm.io/gorm"
@@ -19,43 +18,14 @@ func NewSqliteStorageMock() *SqliteMock {
 }
 
 // CreateUser creates a new user in the mock storage
-func (s *SqliteMock) CreateUser(user *model.User, plainPassword string) error {
+func (s *SqliteMock) CreateUser(user *model.User) error {
 	existing, err := s.GetUserByUsername(user.Username)
 	if err == nil && existing != nil {
 		return gorm.ErrDuplicatedKey
 	}
 
-	salt, err := auth.GenerateSalt()
-	if err != nil {
-		return err
-	}
-
-	hashed := auth.HashPassword(plainPassword, salt)
-	user.Password = hashed
-	user.Salt = salt
-
 	s.users[user.Username] = user
 	return nil
-}
-
-// LoginUser logs in a user from the mock storage
-func (s *SqliteMock) LoginUser(username, password string) (*model.User, error) {
-	user, err := s.GetUserByUsername(username)
-	if err != nil {
-		return nil, gorm.ErrRecordNotFound
-	}
-
-	hashedPassword := auth.HashPassword(password, user.Salt)
-	if hashedPassword != user.Password {
-		return nil, gorm.ErrRecordNotFound
-	}
-
-	return &model.User{
-		ID:       user.ID,
-		Username: user.Username,
-		Password: user.Password,
-		Salt:     user.Salt,
-	}, nil
 }
 
 // GetUserByUsername gets a user by username from the mock storage
@@ -69,7 +39,6 @@ func (s *SqliteMock) GetUserByUsername(username string) (*model.User, error) {
 		ID:       user.ID,
 		Username: user.Username,
 		Password: user.Password,
-		Salt:     user.Salt,
 	}, nil
 
 }

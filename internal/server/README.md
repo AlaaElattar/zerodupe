@@ -1,4 +1,13 @@
-# Server Components
+# Zerodupe Server
+
+Backed server for deduplication file storage system that splits files into chunks and only stores unique chunks, saving storage space.
+
+## Requirements
+
+- Go Version (Go 1.20+)
+- Docker
+
+## Server Components
 
 The server components follow a clean architecture with clear separation of concerns:
 
@@ -12,10 +21,23 @@ The server components follow a clean architecture with clear separation of conce
 └─────────────┘     └─────────────┘     └─────────────┘
 ```
 
-### Components
+## Running the Server
 
-1. **API**: HTTP routes and server setup
-2. **Handler**: Contains logic for handling requests
-3. **Storage**: Interface for data persistence
-4. **Model**: Data structures shared across components
-5. **Config**: Server configuration
+From the project root:
+
+```sh
+go run ./cmd/zerodupe-server/main.go
+```
+
+Or build and run:
+
+```sh
+go build -o zerodupe-server ./cmd/zerodupe-server
+./zerodupe-server
+```
+
+## **Running Tests**
+
+```sh
+go test ./...
+```

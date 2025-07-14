@@ -99,7 +99,6 @@ func (fs *FilesystemStorage) SaveChunkMetadata(fileHash, chunkHash string, chunk
 	}
 	defer fileLock.Unlock()
 
-
 	var metadata model.FileMetadata
 	if _, err := os.Stat(metaPath); err == nil {
 		content, err := os.ReadFile(metaPath)

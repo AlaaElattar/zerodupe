@@ -44,11 +44,11 @@ func NewTokenHandler(secretKey string, accessExpiry, refreshExpiry time.Duration
 
 // CreateTokenPair generates a new access and refresh token pair
 func (h *TokenHandler) CreateTokenPair(userID uint, username string) (*TokenPair, error) {
-	accessToken, err := h.createAccessToken(userID, username)
+	accessToken, err := h.createToken(userID, username, h.accessExpiry)
 	if err != nil {
 		return nil, err
 	}
-	refreshToken, err := h.createRefreshToken(userID, username)
+	refreshToken, err := h.createToken(userID, username, h.refreshExpiry)
 	if err != nil {
 		return nil, err
 	}
@@ -79,31 +79,15 @@ func (h *TokenHandler) VerifyToken(tokenString string) (*TokenClaims, error) {
 	return claims, nil
 }
 
-// createAccessToken generates a new access token
-func (h *TokenHandler) createAccessToken(userID uint, username string) (string, error) {
-	claims := TokenClaims{
-		Username: username,
-		UserID:   userID,
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(h.accessExpiry).Unix(),
-			IssuedAt:  time.Now().Unix(),
-		},
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(h.secretKey)
-	if err != nil {
-		return "", err
-	}
-	return tokenString, nil
-}
+//TODO: only one func `createToken takes all data and expiry date `
 
-// createRefreshToken generates a new refresh token
-func (h *TokenHandler) createRefreshToken(userID uint, username string) (string, error) {
+// createAccessToken generates a new access token
+func (h *TokenHandler) createToken(userID uint, username string, expiration time.Duration) (string, error) {
 	claims := TokenClaims{
 		Username: username,
 		UserID:   userID,
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(h.refreshExpiry).Unix(),
+			ExpiresAt: time.Now().Add(expiration).Unix(),
 			IssuedAt:  time.Now().Unix(),
 		},
 	}
@@ -122,7 +106,7 @@ func (h *TokenHandler) RefreshAccessToken(refreshToken string) (string, error) {
 		return "", err
 	}
 
-	accessToken, err := h.createAccessToken(claims.UserID, claims.Username)
+	accessToken, err := h.createToken(claims.UserID, claims.Username, h.accessExpiry)
 	if err != nil {
 		return "", err
 	}

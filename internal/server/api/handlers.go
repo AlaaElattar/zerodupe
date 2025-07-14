@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"zerodupe/internal/server/auth"
 	"zerodupe/internal/server/model"
@@ -27,79 +28,160 @@ func NewHandler(fileStorage storage.FileStorage, userStorage storage.UserStorage
 	}
 }
 
-// SignUpHandler handles user signup requests
+type LoginRequest struct {
+	Username string `json:"username" binding:"required" example:"john_doe"`
+	Password string `json:"password" binding:"required" example:"password123"`
+}
+
+// SignUpRequest holds data needed for signup
+type SignUpRequest struct {
+	Username        string `json:"username" binding:"required" example:"john_doe"`
+	Password        string `json:"password" binding:"required" example:"password123"`
+	ConfirmPassword string `json:"confirm_password" binding:"required,eqfield=Password" example:"password123"`
+}
+
+// RefreshTokenRequest represents the request body for refreshing an access token
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+// UploadRequest represents a file upload request
+type UploadRequest struct {
+	FileHash   string `json:"file_hash" binding:"required"`
+	ChunkHash  string `json:"chunk_hash" binding:"required"`
+	ChunkOrder int    `json:"chunk_order" binding:"required"`
+	Content    []byte `json:"content"`
+}
+
+// UploadResponse represents a response to an upload request
+type UploadResponse struct {
+	Message      string `json:"message"`
+	FileHash     string `json:"file_hash"`
+	HashMismatch bool   `json:"hash_mismatch"`
+}
+
+// CheckFileResponse represents a response to a file existence check
+type CheckFileResponse struct {
+	Exists bool   `json:"exists"`
+	Hash   string `json:"hash"`
+}
+
+// CheckChunksResponse represents a response to a chunks existence check
+type CheckChunksResponse struct {
+	Missing []string `json:"missing"`
+}
+
+// DownloadFileResponse represents a response to a file download request
+type DownloadFileResponse struct {
+	FileHash    string   `json:"file_hash" binding:"required"`
+	ChunkHashes []string `json:"chunk_hashes"`
+	ChunksCount int      `json:"chunks_count"`
+}
+
+// CheckChunksRequest represents the request body for checking chunk hashes
+type CheckChunksRequest struct {
+	Hashes []string `json:"hashes" binding:"required"`
+}
+
+// @Summary Register a new user
+// @Description Create a new user account with username and password
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body SignUpRequest true "User registration data"
+// @Success 200 {string} string "user registered successfully"
+// @Failure 400 {object} map[string]interface{} "Invalid request format or password mismatch"
+// @Failure 409 {object} map[string]interface{} "User already exists"
+// @Failure 500 {string} string "Internal server error"
+// @Router /auth/signup [post]
 func (h *Handler) SignUpHandler(c *gin.Context) {
-	var request model.AuthRequest
+	var request SignUpRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
+		return
+	}
+
+	if request.Password != request.ConfirmPassword {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "password and confirm password don't match"})
 		return
 	}
 
 	// Check if username already exists
-	_, err := h.userStorage.LoginUser(request.Username, request.Password)
+	_, err := h.userStorage.GetUserByUsername(request.Username)
 	if err == nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Username already exists"})
+		c.JSON(http.StatusConflict, gin.H{"error": "user already exists"})
 		return
 	}
 
-	// Create user
-	user := &model.User{
+	password, err := auth.HashAndSaltPassword([]byte(request.Password))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	err = h.userStorage.CreateUser(&model.User{
 		Username: request.Username,
-	}
-	err = h.userStorage.CreateUser(user, request.Password)
+		Password: password,
+	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+		c.JSON(http.StatusInternalServerError, "internal server error")
 		return
 	}
+	c.JSON(http.StatusOK, "user registered successfully")
 
-	// Login users and get tokens
-	user, err = h.userStorage.LoginUser(request.Username, request.Password)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to login user"})
-		return
-	}
-
-	// Generate tokens
-	tokenPair, err := h.tokenHandler.CreateTokenPair(user.ID, user.Username)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate tokens"})
-		return
-	}
-
-	c.JSON(http.StatusOK, tokenPair)
 }
 
-// LoginHandler handles user login requests
+// @Summary Login user
+// @Description Authenticate user and return access tokens
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body LoginRequest true "User login credentials"
+// @Success 200 {object} auth.TokenPair "Login successful"
+// @Failure 400 {object} map[string]interface{} "Invalid request format"
+// @Failure 404 {object} map[string]interface{} "User does not exist"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /auth/login [post]
 func (h *Handler) LoginHandler(c *gin.Context) {
-	var request model.AuthRequest
+	var request LoginRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
 		return
 	}
 
-	user, err := h.userStorage.LoginUser(request.Username, request.Password)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+	user, err := h.userStorage.GetUserByUsername(request.Username)
+	if err == gorm.ErrRecordNotFound {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user does not exist"})
+		return
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, "internal server error")
 		return
 	}
 
 	// Generate tokens
 	tokenPair, err := h.tokenHandler.CreateTokenPair(user.ID, user.Username)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate tokens"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
 	c.JSON(http.StatusOK, tokenPair)
 }
 
-// RefreshTokenHandler handles token refresh requests
+// @Summary Refresh access token
+// @Description Refresh an expired access token using a refresh token
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body RefreshTokenRequest true "Refresh token"
+// @Success 200 {object} map[string]string "New access token"
+// @Failure 400 {object} map[string]interface{} "Invalid request format"
+// @Failure 401 {object} map[string]interface{} "Invalid refresh token"
+// @Router /auth/refresh [post]
 func (h *Handler) RefreshTokenHandler(c *gin.Context) {
-	var request struct {
-		RefreshToken string `json:"refresh_token" binding:"required"`
-	}
+	var request RefreshTokenRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
 		return
@@ -114,9 +196,19 @@ func (h *Handler) RefreshTokenHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"access_token": accessToken})
 }
 
-// UploadFileHandler handles file upload requests
+// @Summary Upload file chunk
+// @Description Upload a file chunk for deduplication storage
+// @Tags files
+// @Accept json
+// @Produce json
+// @Param request body UploadRequest true "File chunk data"
+// @Success 200 {object} UploadResponse "File uploaded successfully"
+// @Failure 400 {object} map[string]interface{} "Invalid request format"
+// @Failure 404 {object} map[string]interface{} "Chunk does not exist"
+// @Failure 500 {object} map[string]interface{} "Failed to save chunk data"
+// @Router /upload [post]
 func (h *Handler) UploadFileHandler(c *gin.Context) {
-	var request model.UploadRequest
+	var request UploadRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
 		return
@@ -129,7 +221,7 @@ func (h *Handler) UploadFileHandler(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save chunk data"})
 			return
 		}
-		response := model.UploadResponse{
+		response := UploadResponse{
 			Message:      "File uploaded successfully",
 			FileHash:     request.FileHash,
 			HashMismatch: false,
@@ -167,7 +259,7 @@ func (h *Handler) UploadFileHandler(c *gin.Context) {
 		}
 	}
 
-	response := model.UploadResponse{
+	response := UploadResponse{
 		Message:      "File uploaded successfully",
 		FileHash:     request.FileHash,
 		HashMismatch: hashMismatch,
@@ -176,7 +268,16 @@ func (h *Handler) UploadFileHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// CheckFileHashHandler checks if a file exists on the server
+// @Summary Check if file exists
+// @Description Check if a file with the given hash exists on the server
+// @Tags files
+// @Accept json
+// @Produce json
+// @Param filehash path string true "File hash" minlength(4)
+// @Success 200 {object} CheckFileResponse "File existence status"
+// @Failure 400 {object} map[string]interface{} "Invalid file hash"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /check/{filehash} [get]
 func (h *Handler) CheckFileHashHandler(c *gin.Context) {
 	fileHash := c.Param("filehash")
 
@@ -191,7 +292,7 @@ func (h *Handler) CheckFileHashHandler(c *gin.Context) {
 		return
 	}
 
-	response := model.CheckFileResponse{
+	response := CheckFileResponse{
 		Exists: exists,
 		Hash:   fileHash,
 	}
@@ -199,11 +300,18 @@ func (h *Handler) CheckFileHashHandler(c *gin.Context) {
 	c.JSON(200, response)
 }
 
-// CheckChunkHashesHandler checks if chunks exist on the server and returns the missing ones
+// @Summary Check chunk existence
+// @Description Check which chunks exist and return missing ones
+// @Tags files
+// @Accept json
+// @Produce json
+// @Param request body CheckChunksRequest true "Chunk hashes to check"
+// @Success 200 {object} CheckChunksResponse "Missing chunks"
+// @Failure 400 {object} map[string]interface{} "Invalid request format"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /check [post]
 func (h *Handler) CheckChunkHashesHandler(c *gin.Context) {
-	var request struct {
-		Hashes []string `json:"hashes" binding:"required"`
-	}
+	var request CheckChunksRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -215,14 +323,23 @@ func (h *Handler) CheckChunkHashesHandler(c *gin.Context) {
 		return
 	}
 
-	response := model.CheckChunksResponse{
+	response := CheckChunksResponse{
 		Missing: missing,
 	}
 
 	c.JSON(200, response)
 }
 
-// DownloadFileHandler returns the chunks hashes ordered
+// @Summary Download file metadata
+// @Description Get file metadata including ordered chunk hashes for download
+// @Tags files
+// @Accept json
+// @Produce json
+// @Param hash path string true "File hash"
+// @Success 200 {object} DownloadFileResponse "File metadata"
+// @Failure 404 {object} map[string]interface{} "File not found"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /download/{hash} [get]
 func (h *Handler) DownloadFileHandler(c *gin.Context) {
 	fileHash := c.Param("hash")
 
@@ -237,7 +354,7 @@ func (h *Handler) DownloadFileHandler(c *gin.Context) {
 			return
 		}
 
-		result := model.DownloadFileResponse{
+		result := DownloadFileResponse{
 			FileHash:    fileHash,
 			ChunkHashes: []string{fileHash},
 			ChunksCount: 1,
@@ -257,7 +374,7 @@ func (h *Handler) DownloadFileHandler(c *gin.Context) {
 	}
 
 	// return chunks hashes ordered
-	result := model.DownloadFileResponse{
+	result := DownloadFileResponse{
 		FileHash:    fileHash,
 		ChunkHashes: orderedHashes,
 		ChunksCount: len(orderedHashes),
@@ -267,7 +384,15 @@ func (h *Handler) DownloadFileHandler(c *gin.Context) {
 
 }
 
-// GetChunkContent returns the content of a chunk
+// @Summary Get chunk content
+// @Description Download the content of a specific chunk
+// @Tags files
+// @Accept json
+// @Produce octet-stream
+// @Param hash path string true "Chunk hash"
+// @Success 200 {file} binary "Chunk content"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /chunk/{hash} [get]
 func (h *Handler) GetChunkContent(c *gin.Context) {
 	chunkHash := c.Param("hash")
 	content, err := h.fileStorage.GetChunkData(chunkHash)

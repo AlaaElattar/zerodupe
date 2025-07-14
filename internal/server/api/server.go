@@ -11,8 +11,12 @@ import (
 	"zerodupe/internal/server/storage/filesystem"
 	"zerodupe/internal/server/storage/sqlite"
 
+	_ "zerodupe/internal/server/docs" // This is the generated docs package
+
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 // Server for all dependencies for server
@@ -40,8 +44,8 @@ func NewServer(config config.Config) (*Server, error) {
 
 	tokenHandler := auth.NewTokenHandler(
 		config.JWTSecret,
-		time.Duration(config.AccessTokenExpiry)*time.Minute,
-		time.Duration(config.RefreshTokenExpiry)*time.Hour,
+		time.Duration(config.AccessTokenExpiryMin)*time.Minute,
+		time.Duration(config.RefreshTokenExpiryHour)*time.Hour,
 	)
 
 	handler := NewHandler(fileStorage, userStorage, tokenHandler)
@@ -62,6 +66,8 @@ func NewServer(config config.Config) (*Server, error) {
 
 // registerHandlers registers all routes
 func (server *Server) registerHandlers() {
+	server.router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
 	server.router.POST("/auth/signup", server.handler.SignUpHandler)
 	server.router.POST("/auth/login", server.handler.LoginHandler)
 	server.router.POST("/auth/refresh", server.handler.RefreshTokenHandler)

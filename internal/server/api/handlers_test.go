@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 	"zerodupe/internal/server/auth"
@@ -35,243 +35,163 @@ func setupTestEnv() (*gin.Engine, *Handler, *MockFileStorage, *MockUserStorage, 
 	return router, handler, fileStorage, userStorage, tokenHandler
 }
 
-func createTestFile(t *testing.T, name string, content []byte) string {
-	t.Helper()
-	tmpFile, err := os.CreateTemp("", name)
+// create a new HTTP request with a JSON body and set Content-Type
+func newRequest(t *testing.T, method, url string, body interface{}) *http.Request {
+	var buf bytes.Buffer
+	if body != nil {
+		err := json.NewEncoder(&buf).Encode(body)
+		require.NoError(t, err)
+	}
+	req, err := http.NewRequest(method, url, &buf)
 	require.NoError(t, err)
-
-	defer tmpFile.Close()
-
-	_, err = tmpFile.Write(content)
-	require.NoError(t, err)
-
-	return tmpFile.Name()
+	req.Header.Set("Content-Type", "application/json")
+	return req
 }
 
-func TestSignUpHandler(t *testing.T) {
-	t.Run("Test SignUpHandler creates a new user", func(t *testing.T) {
+// perform a request and return the response
+func applyRequest(router *gin.Engine, req *http.Request) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	return w
+}
+
+func Test_SignUpHandler(t *testing.T) {
+	t.Run("Test_SignUpHandler_Creates_A_New_User", func(t *testing.T) {
 		router, handler, _, userStorage, _ := setupTestEnv()
 		router.POST("/auth/signup", handler.SignUpHandler)
 
-		reqBody := model.AuthRequest{
-			Username: "test",
-			Password: "test",
+		username := "username"
+
+		reqBody := SignUpRequest{
+			Username:        username,
+			Password:        "test",
+			ConfirmPassword: "test",
 		}
 
-		userStorage.On("LoginUser", "test", "test").Return(nil, gorm.ErrRecordNotFound).Once()
+		userStorage.On("GetUserByUsername", username).Return(nil, gorm.ErrRecordNotFound).Once()
 
-		userStorage.On("CreateUser", mock.AnythingOfType("*model.User"), "test").Return(nil).Run(func(args mock.Arguments) {
+		userStorage.On("CreateUser", mock.AnythingOfType("*model.User")).Return(nil).Run(func(args mock.Arguments) {
 			user := args.Get(0).(*model.User)
-			assert.Equal(t, "test", user.Username)
+			assert.Equal(t, username, user.Username)
 		})
 
-		userStorage.On("LoginUser", "test", "test").Return(&model.User{Username: "test"}, nil).Once()
-
-		jsonBody, err := json.Marshal(reqBody)
-		if err != nil {
-			t.Errorf("Failed to marshal JSON: %v", err)
-		}
-
-		req, err := http.NewRequest("POST", "/auth/signup", bytes.NewBuffer(jsonBody))
-		if err != nil {
-			t.Errorf("Failed to create request: %v", err)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "POST", "/auth/signup", reqBody)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-
-		var response auth.TokenPair
-		err = json.Unmarshal(w.Body.Bytes(), &response)
-		if err != nil {
-			t.Errorf("Failed to unmarshal response: %v", err)
-		}
-
-		assert.NotEmpty(t, response.AccessToken)
-		assert.NotEmpty(t, response.RefreshToken)
-
+		assert.JSONEq(t, `"user registered successfully"`, w.Body.String())
 		userStorage.AssertExpectations(t)
-
 	})
 
-	t.Run("Test SignUpHandler with Invalid request format", func(t *testing.T) {
+	t.Run("Test_SignUpHandler_With_Invalid_Request_Format", func(t *testing.T) {
 		router, handler, _, _, _ := setupTestEnv()
 		router.POST("/auth/signup", handler.SignUpHandler)
 
-		req, err := http.NewRequest("POST", "/auth/signup", bytes.NewBuffer([]byte("invalid")))
-		if err != nil {
-			t.Errorf("Failed to create request: %v", err)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "POST", "/auth/signup", nil)
+		req.Body = ioutil.NopCloser(bytes.NewBuffer([]byte("invalid"))) // override with invalid body
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "Invalid request format")
-
 	})
 
-	t.Run("Test SignUpHandler with Username already exists", func(t *testing.T) {
+	t.Run("Test_SignUpHandler_With_Username_Already_Exists", func(t *testing.T) {
 		router, handler, _, userStorage, _ := setupTestEnv()
 		router.POST("/auth/signup", handler.SignUpHandler)
+		username := "username"
 
-		reqBody := model.AuthRequest{
-			Username: "test",
-			Password: "test",
+		reqBody := SignUpRequest{
+			Username:        username,
+			Password:        "test",
+			ConfirmPassword: "test",
 		}
 
-		userStorage.On("LoginUser", "test", "test").Return(&model.User{Username: "test"}, nil).Once()
+		userStorage.On("GetUserByUsername", username).
+			Return(&model.User{Username: username}, nil).
+			Once()
 
-		jsonBody, err := json.Marshal(reqBody)
-		if err != nil {
-			t.Errorf("Failed to marshal JSON: %v", err)
-		}
-
-		req, err := http.NewRequest("POST", "/auth/signup", bytes.NewBuffer(jsonBody))
-		if err != nil {
-			t.Errorf("Failed to create request: %v", err)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "POST", "/auth/signup", reqBody)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusConflict, w.Code)
-		assert.Contains(t, w.Body.String(), "Username already exists")
+		assert.Contains(t, w.Body.String(), "user already exists")
 
 		userStorage.AssertExpectations(t)
 
 	})
 
-	t.Run("Test SignUpHandler with Failed to create user", func(t *testing.T) {
+	t.Run("Test_SignUpHandler_With_Failed_To_Create_User", func(t *testing.T) {
 		router, handler, _, userStorage, _ := setupTestEnv()
 		router.POST("/auth/signup", handler.SignUpHandler)
 
-		reqBody := model.AuthRequest{
-			Username: "test",
-			Password: "test",
+		reqBody := SignUpRequest{
+			Username:        "test",
+			Password:        "test",
+			ConfirmPassword: "test",
 		}
 
-		userStorage.On("LoginUser", "test", "test").Return(nil, gorm.ErrRecordNotFound).Once()
+		userStorage.On("GetUserByUsername", "test").Return(nil, gorm.ErrRecordNotFound).Once()
 
-		userStorage.On("CreateUser", mock.AnythingOfType("*model.User"), "test").Return(gorm.ErrDuplicatedKey).Once()
+		userStorage.On("CreateUser", mock.AnythingOfType("*model.User")).Return(gorm.ErrDuplicatedKey).Once()
 
-		jsonBody, err := json.Marshal(reqBody)
-		if err != nil {
-			t.Errorf("Failed to marshal JSON: %v", err)
-		}
-
-		req, err := http.NewRequest("POST", "/auth/signup", bytes.NewBuffer(jsonBody))
-		if err != nil {
-			t.Errorf("Failed to create request: %v", err)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "POST", "/auth/signup", reqBody)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
-		assert.Contains(t, w.Body.String(), "Failed to create user")
-
-		userStorage.AssertExpectations(t)
-
-	})
-
-	t.Run("Test SignUpHandler with Failed to login user", func(t *testing.T) {
-		router, handler, _, userStorage, _ := setupTestEnv()
-		router.POST("/auth/signup", handler.SignUpHandler)
-
-		reqBody := model.AuthRequest{
-			Username: "test",
-			Password: "test",
-		}
-
-		userStorage.On("LoginUser", "test", "test").Return(nil, gorm.ErrRecordNotFound).Once()
-
-		userStorage.On("CreateUser", mock.AnythingOfType("*model.User"), "test").Return(nil).Run(func(args mock.Arguments) {
-			user := args.Get(0).(*model.User)
-			assert.Equal(t, "test", user.Username)
-		})
-
-		userStorage.On("LoginUser", "test", "test").Return(nil, gorm.ErrRecordNotFound).Once()
-
-		jsonBody, err := json.Marshal(reqBody)
-		if err != nil {
-			t.Errorf("Failed to marshal JSON: %v", err)
-		}
-
-		req, err := http.NewRequest("POST", "/auth/signup", bytes.NewBuffer(jsonBody))
-		if err != nil {
-			t.Errorf("Failed to create request: %v", err)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, w.Body.String(), "internal server error")
 
 		userStorage.AssertExpectations(t)
 
 	})
 }
 
-func TestLoginHandler(t *testing.T) {
+func Test_LoginHandler(t *testing.T) {
 
-	t.Run("Test LoginHandler with valid credentials", func(t *testing.T) {
-		router, handler, _, userStorage, _ := setupTestEnv()
+	t.Run("Test_LoginHandler_With_Valid_Credentials", func(t *testing.T) {
+		router, handler, _, userStorage, tokenHandler := setupTestEnv()
 		router.POST("/auth/login", handler.LoginHandler)
 
-		reqBody := model.AuthRequest{
+		reqBody := LoginRequest{
 			Username: "test",
 			Password: "test",
 		}
 
-		userStorage.On("LoginUser", "test", "test").Return(&model.User{Username: "test"}, nil).Once()
-
-		jsonBody, err := json.Marshal(reqBody)
-		if err != nil {
-			t.Errorf("Failed to marshal JSON: %v", err)
+		user := &model.User{
+			ID:       1,
+			Username: "test",
+			Password: []byte("hashed"),
 		}
 
-		req, err := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(jsonBody))
-		if err != nil {
-			t.Errorf("Failed to create request: %v", err)
-		}
+		userStorage.On("GetUserByUsername", "test").Return(user, nil).Once()
 
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		tokenHandler.On("CreateTokenPair", uint(1), user.Username).Return(&auth.TokenPair{
+			AccessToken:  "access-token",
+			RefreshToken: "refresh-token",
+		}, nil).Once()
+
+		req := newRequest(t, "POST", "/auth/login", reqBody)
+		w := applyRequest(router, req)
 		assert.Equal(t, http.StatusOK, w.Code)
 
 		var response auth.TokenPair
-		err = json.Unmarshal(w.Body.Bytes(), &response)
-		if err != nil {
-			t.Errorf("Failed to unmarshal response: %v", err)
-		}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
 
-		assert.NotEmpty(t, response.AccessToken)
-		assert.NotEmpty(t, response.RefreshToken)
+		assert.Equal(t, "access-token", response.AccessToken)
+		assert.Equal(t, "refresh-token", response.RefreshToken)
 
 		userStorage.AssertExpectations(t)
+		tokenHandler.AssertExpectations(t)
 
 	})
 
-	t.Run("Test LoginHandler with invalid request format", func(t *testing.T) {
+	t.Run("Test_LoginHandler_With_Invalid_Request_Format", func(t *testing.T) {
 		router, handler, _, userStorage, _ := setupTestEnv()
 		router.POST("/auth/login", handler.LoginHandler)
 
-		req, err := http.NewRequest("POST", "/auth/login", bytes.NewBuffer([]byte("invalid")))
-		if err != nil {
-			t.Errorf("Failed to create request: %v", err)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "POST", "/auth/login", nil)
+		req.Body = ioutil.NopCloser(bytes.NewBuffer([]byte("invalid"))) // override with invalid body
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "Invalid request format")
@@ -280,33 +200,22 @@ func TestLoginHandler(t *testing.T) {
 
 	})
 
-	t.Run("Test LoginHandler with invalid credentials", func(t *testing.T) {
+	t.Run("Test_LoginHandler_With_Non_Existing_User", func(t *testing.T) {
 		router, handler, _, userStorage, _ := setupTestEnv()
 		router.POST("/auth/login", handler.LoginHandler)
 
-		reqBody := model.AuthRequest{
+		reqBody := LoginRequest{
 			Username: "test",
 			Password: "test",
 		}
 
-		userStorage.On("LoginUser", "test", "test").Return(nil, gorm.ErrRecordNotFound).Once()
+		userStorage.On("GetUserByUsername", "test").Return(nil, gorm.ErrRecordNotFound).Once()
 
-		jsonBody, err := json.Marshal(reqBody)
-		if err != nil {
-			t.Errorf("Failed to marshal JSON: %v", err)
-		}
+		req := newRequest(t, "POST", "/auth/login", reqBody)
+		w := applyRequest(router, req)
 
-		req, err := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(jsonBody))
-		if err != nil {
-			t.Errorf("Failed to create request: %v", err)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusUnauthorized, w.Code)
-		assert.Contains(t, w.Body.String(), "Invalid credentials")
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.Contains(t, w.Body.String(), "user does not exist")
 
 		userStorage.AssertExpectations(t)
 
@@ -314,9 +223,9 @@ func TestLoginHandler(t *testing.T) {
 
 }
 
-func TestRefreshTokenHandler(t *testing.T) {
+func Test_RefreshTokenHandler(t *testing.T) {
 
-	t.Run("Test RefreshTokenHandler with valid refresh token", func(t *testing.T) {
+	t.Run("Test_RefreshTokenHandler_With_Valid_Refresh_Token", func(t *testing.T) {
 		router, handler, _, _, tokenHandler := setupTestEnv()
 		router.POST("/auth/refresh", handler.RefreshTokenHandler)
 
@@ -330,27 +239,16 @@ func TestRefreshTokenHandler(t *testing.T) {
 		}
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 		tokenString, err := token.SignedString([]byte("test-secret"))
-		if err != nil {
-			t.Errorf("Failed to sign token: %v", err)
-		}
+		assert.NoError(t, err)
+
+		tokenHandler.On("RefreshAccessToken", tokenString).Return("new-access-token", nil).Once()
 
 		reqBody := map[string]string{
 			"refresh_token": tokenString,
 		}
 
-		jsonBody, err := json.Marshal(reqBody)
-		if err != nil {
-			t.Errorf("Failed to marshal JSON: %v", err)
-		}
-
-		req, err := http.NewRequest("POST", "/auth/refresh", bytes.NewBuffer(jsonBody))
-		if err != nil {
-			t.Errorf("Failed to create request: %v", err)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "POST", "/auth/refresh", reqBody)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
@@ -358,59 +256,35 @@ func TestRefreshTokenHandler(t *testing.T) {
 			AccessToken string `json:"access_token"`
 		}
 		err = json.Unmarshal(w.Body.Bytes(), &response)
-		if err != nil {
-			t.Errorf("Failed to unmarshal response: %v", err)
-			return
-		}
+		assert.NoError(t, err)
 
 		assert.NotEmpty(t, response.AccessToken)
 
-		_, err = tokenHandler.VerifyToken(response.AccessToken)
-		if err != nil {
-			t.Errorf("Failed to verify access token: %v", err)
-		}
-
 	})
 
-	t.Run("Test RefreshTokenHandler with invalid request format", func(t *testing.T) {
+	t.Run("Test_RefreshTokenHandler_With_Invalid_Request_Format", func(t *testing.T) {
 		router, handler, _, _, _ := setupTestEnv()
 		router.POST("/auth/refresh", handler.RefreshTokenHandler)
 
-		req, err := http.NewRequest("POST", "/auth/refresh", bytes.NewBuffer([]byte("invalid")))
-		if err != nil {
-			t.Errorf("Failed to create request: %v", err)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "POST", "/auth/refresh", nil)
+		req.Body = ioutil.NopCloser(bytes.NewBuffer([]byte("invalid"))) // override with invalid body
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "Invalid request format")
 
 	})
 
-	t.Run("Test RefreshTokenHandler with invalid refresh token", func(t *testing.T) {
-		router, handler, _, _, _ := setupTestEnv()
+	t.Run("Test_RefreshTokenHandler_With_Invalid_Refresh_Token", func(t *testing.T) {
+		router, handler, _, _, tokenHandler := setupTestEnv()
 		router.POST("/auth/refresh", handler.RefreshTokenHandler)
 
 		reqBody := map[string]string{
 			"refresh_token": "invalid",
 		}
-
-		jsonBody, err := json.Marshal(reqBody)
-		if err != nil {
-			t.Errorf("Failed to marshal JSON: %v", err)
-		}
-
-		req, err := http.NewRequest("POST", "/auth/refresh", bytes.NewBuffer(jsonBody))
-		if err != nil {
-			t.Errorf("Failed to create request: %v", err)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		tokenHandler.On("RefreshAccessToken", "invalid").Return("", errors.New("invalid token")).Once()
+		req := newRequest(t, "POST", "/auth/refresh", reqBody)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 		assert.Contains(t, w.Body.String(), "Invalid refresh token")
@@ -419,15 +293,15 @@ func TestRefreshTokenHandler(t *testing.T) {
 
 }
 
-func TestUploadFileHandler(t *testing.T) {
-	t.Run("Test UploadFileHandler with valid request (one chunk file)", func(t *testing.T) {
+func Test_UploadFileHandler(t *testing.T) {
+	t.Run("Test_UploadFileHandler_With_Valid_Request_One_Chunk_File", func(t *testing.T) {
 		router, handler, fileStorage, _, _ := setupTestEnv()
 		router.POST("/upload", handler.UploadFileHandler)
 
 		chunkHash := hasher.CalculateChunkHash([]byte("Hello World!"))
 		content := []byte("Hello World!")
 
-		uploadRequest := model.UploadRequest{
+		uploadRequest := UploadRequest{
 			FileHash:   chunkHash,
 			ChunkHash:  chunkHash,
 			ChunkOrder: 1,
@@ -436,27 +310,14 @@ func TestUploadFileHandler(t *testing.T) {
 
 		fileStorage.On("SaveChunkData", chunkHash, content).Return(chunkHash, nil).Once()
 
-		jsonBody, err := json.Marshal(uploadRequest)
-		if err != nil {
-			t.Errorf("Failed to marshal JSON: %v", err)
-		}
-
-		req, err := http.NewRequest("POST", "/upload", bytes.NewBuffer(jsonBody))
-		if err != nil {
-			t.Errorf("Failed to create request: %v", err)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "POST", "/upload", uploadRequest)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response model.UploadResponse
-		err = json.Unmarshal(w.Body.Bytes(), &response)
-		if err != nil {
-			t.Errorf("Failed to unmarshal response: %v", err)
-		}
+		var response UploadResponse
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
 
 		assert.Equal(t, "File uploaded successfully", response.Message)
 		assert.Equal(t, chunkHash, response.FileHash)
@@ -466,7 +327,7 @@ func TestUploadFileHandler(t *testing.T) {
 
 	})
 
-	t.Run("Test UploadFileHandler with valid request (multi chunk file)", func(t *testing.T) {
+	t.Run("Test_UploadFileHandler_With_Valid_Request_Multi_Chunk_File", func(t *testing.T) {
 		router, handler, fileStorage, _, _ := setupTestEnv()
 		router.POST("/upload", handler.UploadFileHandler)
 
@@ -474,7 +335,7 @@ func TestUploadFileHandler(t *testing.T) {
 		chunkHash := hasher.CalculateChunkHash([]byte("Hello World!"))
 		content := []byte("Hello World!")
 
-		uploadRequest := model.UploadRequest{
+		uploadRequest := UploadRequest{
 			FileHash:   fileHash,
 			ChunkHash:  chunkHash,
 			ChunkOrder: 1,
@@ -484,27 +345,14 @@ func TestUploadFileHandler(t *testing.T) {
 		fileStorage.On("SaveChunkMetadata", fileHash, chunkHash, 1).Return(nil).Once()
 		fileStorage.On("SaveChunkData", chunkHash, content).Return(chunkHash, nil).Once()
 
-		jsonBody, err := json.Marshal(uploadRequest)
-		if err != nil {
-			t.Errorf("Failed to marshal JSON: %v", err)
-		}
-
-		req, err := http.NewRequest("POST", "/upload", bytes.NewBuffer(jsonBody))
-		if err != nil {
-			t.Errorf("Failed to create request: %v", err)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "POST", "/upload", uploadRequest)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response model.UploadResponse
-		err = json.Unmarshal(w.Body.Bytes(), &response)
-		if err != nil {
-			t.Errorf("Failed to unmarshal response: %v", err)
-		}
+		var response UploadResponse
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
 
 		assert.Equal(t, "File uploaded successfully", response.Message)
 		assert.Equal(t, fileHash, response.FileHash)
@@ -514,32 +362,27 @@ func TestUploadFileHandler(t *testing.T) {
 
 	})
 
-	t.Run("Test UploadFileHandler with invalid request format", func(t *testing.T) {
+	t.Run("Test_UploadFileHandler_With_Invalid_Request_Format", func(t *testing.T) {
 		router, handler, _, _, _ := setupTestEnv()
 		router.POST("/upload", handler.UploadFileHandler)
 
-		req, err := http.NewRequest("POST", "/upload", bytes.NewBuffer([]byte("invalid")))
-		if err != nil {
-			t.Errorf("Failed to create request: %v", err)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "POST", "/upload", nil)
+		req.Body = ioutil.NopCloser(bytes.NewBuffer([]byte("invalid"))) // override with invalid body
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "Invalid request format")
 
 	})
 
-	t.Run("Test UploadFileHandler with Internal Server Error", func(t *testing.T) {
+	t.Run("Test_UploadFileHandler_With_Internal_Server_Error", func(t *testing.T) {
 		router, handler, fileStorage, _, _ := setupTestEnv()
 		router.POST("/upload", handler.UploadFileHandler)
 
 		chunkHash := hasher.CalculateChunkHash([]byte("Hello World!"))
 		content := []byte("Hello World!")
 
-		uploadRequest := model.UploadRequest{
+		uploadRequest := UploadRequest{
 			FileHash:   chunkHash,
 			ChunkHash:  chunkHash,
 			ChunkOrder: 1,
@@ -548,19 +391,8 @@ func TestUploadFileHandler(t *testing.T) {
 
 		fileStorage.On("SaveChunkData", chunkHash, content).Return("", errors.New("test error")).Once()
 
-		jsonBody, err := json.Marshal(uploadRequest)
-		if err != nil {
-			t.Errorf("Failed to marshal JSON: %v", err)
-		}
-
-		req, err := http.NewRequest("POST", "/upload", bytes.NewBuffer(jsonBody))
-		if err != nil {
-			t.Errorf("Failed to create request: %v", err)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "POST", "/upload", uploadRequest)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.Contains(t, w.Body.String(), "Failed to save chunk data")
@@ -570,8 +402,8 @@ func TestUploadFileHandler(t *testing.T) {
 
 }
 
-func TestCheckFileHashHandler(t *testing.T) {
-	t.Run("Test CheckFileHashHandler with valid request", func(t *testing.T) {
+func Test_CheckFileHashHandler(t *testing.T) {
+	t.Run("Test_CheckFileHashHandler_With_Valid_Request", func(t *testing.T) {
 		router, handler, fileStorage, _, _ := setupTestEnv()
 		router.GET("/check/:filehash", handler.CheckFileHashHandler)
 
@@ -579,19 +411,14 @@ func TestCheckFileHashHandler(t *testing.T) {
 
 		fileStorage.On("CheckFileExists", fileHash).Return(true, nil).Once()
 
-		req, err := http.NewRequest("GET", "/check/"+fileHash, nil)
-		assert.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "GET", "/check/"+fileHash, nil)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response model.CheckFileResponse
-		err = json.Unmarshal(w.Body.Bytes(), &response)
-		if err != nil {
-			t.Errorf("Failed to unmarshal response: %v", err)
-		}
+		var response CheckFileResponse
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
 
 		assert.True(t, response.Exists)
 		assert.Equal(t, fileHash, response.Hash)
@@ -599,23 +426,20 @@ func TestCheckFileHashHandler(t *testing.T) {
 		fileStorage.AssertExpectations(t)
 	})
 
-	t.Run("Test CheckFileHashHandler with invalid file hash", func(t *testing.T) {
+	t.Run("Test_CheckFileHashHandler_With_Invalid_File_Hash", func(t *testing.T) {
 		router, handler, _, _, _ := setupTestEnv()
 		router.GET("/check/:filehash", handler.CheckFileHashHandler)
 
 		fileHash := "fi"
-		req, err := http.NewRequest("GET", "/check/"+fileHash, nil)
-		assert.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "GET", "/check/"+fileHash, nil)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Contains(t, w.Body.String(), "Invalid file hash")
 
 	})
 
-	t.Run("Test CheckFileHashHandler with internal server error", func(t *testing.T) {
+	t.Run("Test_CheckFileHashHandler_With_Internal_Server_Error", func(t *testing.T) {
 		router, handler, fileStorage, _, _ := setupTestEnv()
 		router.GET("/check/:filehash", handler.CheckFileHashHandler)
 
@@ -623,11 +447,8 @@ func TestCheckFileHashHandler(t *testing.T) {
 
 		fileStorage.On("CheckFileExists", fileHash).Return(false, errors.New("test error")).Once()
 
-		req, err := http.NewRequest("GET", "/check/"+fileHash, nil)
-		assert.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "GET", "/check/"+fileHash, nil)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.Contains(t, w.Body.String(), "test error")
@@ -637,8 +458,8 @@ func TestCheckFileHashHandler(t *testing.T) {
 
 }
 
-func TestCheckChunkHashesHandler(t *testing.T) {
-	t.Run("Test CheckChunkHashesHandler with valid request", func(t *testing.T) {
+func Test_CheckChunkHashesHandler(t *testing.T) {
+	t.Run("Test_CheckChunkHashesHandler_With_Valid_Request", func(t *testing.T) {
 		router, handler, fileStorage, _, _ := setupTestEnv()
 		router.POST("/check", handler.CheckChunkHashesHandler)
 
@@ -651,49 +472,33 @@ func TestCheckChunkHashesHandler(t *testing.T) {
 			"hashes": hashes,
 		}
 
-		jsonBody, err := json.Marshal(reqBody)
-		if err != nil {
-			t.Errorf("Failed to marshal JSON: %v", err)
-		}
-
-		req, err := http.NewRequest("POST", "/check", bytes.NewBuffer(jsonBody))
-		if err != nil {
-			t.Errorf("Failed to create request: %v", err)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "POST", "/check", reqBody)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response model.CheckChunksResponse
-		err = json.Unmarshal(w.Body.Bytes(), &response)
-		if err != nil {
-			t.Errorf("Failed to unmarshal response: %v", err)
-		}
+		var response CheckChunksResponse
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
 
 		assert.Equal(t, missing, response.Missing)
 
 		fileStorage.AssertExpectations(t)
 	})
 
-	t.Run("Test CheckChunkHashesHandler with invalid request format", func(t *testing.T) {
+	t.Run("Test_CheckChunkHashesHandler_With_Invalid_Request_Format", func(t *testing.T) {
 		router, handler, _, _, _ := setupTestEnv()
 		router.POST("/check", handler.CheckChunkHashesHandler)
 
-		req, err := http.NewRequest("POST", "/check", bytes.NewBuffer([]byte("invalid")))
-		assert.NoError(t, err)
-
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "POST", "/check", nil)
+		req.Body = ioutil.NopCloser(bytes.NewBuffer([]byte("invalid"))) // override with invalid body
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 
 	})
 
-	t.Run("Test CheckChunkHashesHandler with internal server error", func(t *testing.T) {
+	t.Run("Test_CheckChunkHashesHandler_With_Internal_Server_Error", func(t *testing.T) {
 		router, handler, fileStorage, _, _ := setupTestEnv()
 		router.POST("/check", handler.CheckChunkHashesHandler)
 
@@ -705,19 +510,8 @@ func TestCheckChunkHashesHandler(t *testing.T) {
 			"hashes": hashes,
 		}
 
-		jsonBody, err := json.Marshal(reqBody)
-		if err != nil {
-			t.Errorf("Failed to marshal JSON: %v", err)
-		}
-
-		req, err := http.NewRequest("POST", "/check", bytes.NewBuffer(jsonBody))
-		if err != nil {
-			t.Errorf("Failed to create request: %v", err)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "POST", "/check", reqBody)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.Contains(t, w.Body.String(), "test error")
@@ -726,8 +520,8 @@ func TestCheckChunkHashesHandler(t *testing.T) {
 	})
 }
 
-func TestDownloadFileHandler(t *testing.T) {
-	t.Run("Test DownloadFileHandler with valid request", func(t *testing.T) {
+func Test_DownloadFileHandler(t *testing.T) {
+	t.Run("Test_DownloadFileHandler_With_Valid_Request", func(t *testing.T) {
 		router, handler, fileStorage, _, _ := setupTestEnv()
 		router.GET("/download/:hash", handler.DownloadFileHandler)
 
@@ -741,19 +535,14 @@ func TestDownloadFileHandler(t *testing.T) {
 			},
 		}, nil).Once()
 
-		req, err := http.NewRequest("GET", "/download/"+fileHash, nil)
-		assert.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "GET", "/download/"+fileHash, nil)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response model.DownloadFileResponse
-		err = json.Unmarshal(w.Body.Bytes(), &response)
-		if err != nil {
-			t.Errorf("Failed to unmarshal response: %v", err)
-		}
+		var response DownloadFileResponse
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
 
 		assert.Equal(t, response.ChunkHashes, []string{"chunkhash123456789"})
 		assert.Equal(t, response.ChunksCount, 1)
@@ -761,19 +550,18 @@ func TestDownloadFileHandler(t *testing.T) {
 
 	})
 
-	t.Run("Test DownloadFileHandler with non-existing request", func(t *testing.T) {
+	t.Run("Test_DownloadFileHandler_With_Non_Existing_Request", func(t *testing.T) {
 		router, handler, _, _, _ := setupTestEnv()
 		router.GET("/download/:hash", handler.DownloadFileHandler)
 
-		req, _ := http.NewRequest("GET", "/download", nil)
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "GET", "/download", nil)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
 
 	})
 
-	t.Run("Test DownloadFileHandler with internal server error", func(t *testing.T) {
+	t.Run("Test_DownloadFileHandler_With_Internal_Server_Error", func(t *testing.T) {
 		router, handler, fileStorage, _, _ := setupTestEnv()
 		router.GET("/download/:hash", handler.DownloadFileHandler)
 
@@ -785,17 +573,14 @@ func TestDownloadFileHandler(t *testing.T) {
 		fileStorage.On("GetChunkData", fileHash).
 			Return([]byte{}, errors.New("test chunk error")).Once()
 
-		req, err := http.NewRequest("GET", "/download/"+fileHash, nil)
-		assert.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "GET", "/download/"+fileHash, nil)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.Contains(t, w.Body.String(), "test chunk error")
 	})
 
-	t.Run("Test DownloadFileHandler with single chunk file", func(t *testing.T) {
+	t.Run("Test_DownloadFileHandler_With_Single_Chunk_File", func(t *testing.T) {
 		router, handler, fileStorage, _, _ := setupTestEnv()
 		router.GET("/download/:hash", handler.DownloadFileHandler)
 
@@ -804,19 +589,14 @@ func TestDownloadFileHandler(t *testing.T) {
 		fileStorage.On("GetChunkData", fileHash).
 			Return([]byte("Hello World !"), nil).Once()
 
-		req, err := http.NewRequest("GET", "/download/"+fileHash, nil)
-		assert.NoError(t, err)
-
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "GET", "/download/"+fileHash, nil)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response model.DownloadFileResponse
-		err = json.Unmarshal(w.Body.Bytes(), &response)
-		if err != nil {
-			t.Errorf("Failed to unmarshal response: %v", err)
-		}
+		var response DownloadFileResponse
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
 
 		assert.Equal(t, response.ChunkHashes, []string{fileHash})
 		assert.Equal(t, response.ChunksCount, 1)
@@ -826,54 +606,42 @@ func TestDownloadFileHandler(t *testing.T) {
 
 }
 
-func TestGetChunkContent(t *testing.T) {
+func Test_GetChunkContent(t *testing.T) {
 
-	t.Run("Test GetChunkContent with valid request", func(t *testing.T) {
+	t.Run("Test_GetChunkContent_With_Valid_Request", func(t *testing.T) {
 		router, handler, fileStorage, _, _ := setupTestEnv()
 		router.GET("/chunk/:hash", handler.GetChunkContent)
 
 		chunkHash := "chunkHash1235487"
 		fileStorage.On("GetChunkData", chunkHash).Return([]byte("Hello World!"), nil).Once()
 
-		req, err := http.NewRequest("GET", "/chunk/"+chunkHash, nil)
-		assert.NoError(t, err)
-
-		req.Header.Set("Content-Type", "application/octet-stream")
-
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "GET", "/chunk/"+chunkHash, nil)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
 	})
 
-	t.Run("Test GetChunkContent with invalid request", func(t *testing.T) {
+	t.Run("Test_GetChunkContent_With_Invalid_Request", func(t *testing.T) {
 		router, handler, _, _, _ := setupTestEnv()
 		router.GET("/chunk/:hash", handler.GetChunkContent)
 
-		req, _ := http.NewRequest("GET", "/chunk/", nil)
-		req.Header.Set("Content-Type", "application/octet-stream")
-
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "GET", "/chunk/", nil)
+		req.Body = ioutil.NopCloser(bytes.NewBuffer([]byte("invalid"))) // override with invalid body
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusNotFound, w.Code)
 
 	})
-	t.Run("Test GetChunkContent with internal server error", func(t *testing.T) {
+	t.Run("Test_GetChunkContent_With_Internal_Server_Error", func(t *testing.T) {
 		router, handler, fileStorage, _, _ := setupTestEnv()
 		router.GET("/chunk/:hash", handler.GetChunkContent)
 
 		chunkHash := "chunkHash1235487"
 		fileStorage.On("GetChunkData", chunkHash).Return([]byte(nil), errors.New("test error")).Once()
 
-		req, err := http.NewRequest("GET", "/chunk/"+chunkHash, nil)
-		assert.NoError(t, err)
-
-		req.Header.Set("Content-Type", "application/octet-stream")
-
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "GET", "/chunk/"+chunkHash, nil)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 
@@ -881,9 +649,9 @@ func TestGetChunkContent(t *testing.T) {
 
 }
 
-func TestAuthMiddleware(t *testing.T) {
+func Test_AuthMiddleware(t *testing.T) {
 
-	t.Run("Test AuthMiddleware with valid request", func(t *testing.T) {
+	t.Run("Test_AuthMiddleware_With_Valid_Request", func(t *testing.T) {
 		router, _, _, _, tokenHandler := setupTestEnv()
 		accessToken := "testaccesstoken123456789"
 		refreshToken := "testrefreshtoken123456789"
@@ -909,10 +677,9 @@ func TestAuthMiddleware(t *testing.T) {
 			})
 		})
 
-		req, _ := http.NewRequest("GET", "/protected", nil)
+		req := newRequest(t, "GET", "/protected", nil)
 		req.Header.Set("Authorization", "Bearer "+accessToken)
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.JSONEq(t, `{
@@ -923,7 +690,7 @@ func TestAuthMiddleware(t *testing.T) {
 
 	})
 
-	t.Run("Test AuthMiddleware with no authorization header", func(t *testing.T) {
+	t.Run("Test_AuthMiddleware_With_No_Authorization_Header", func(t *testing.T) {
 		router, _, _, _, tokenHandler := setupTestEnv()
 
 		router.Use(AuthMiddleware(tokenHandler))
@@ -938,15 +705,14 @@ func TestAuthMiddleware(t *testing.T) {
 			})
 		})
 
-		req, _ := http.NewRequest("GET", "/protected", nil)
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		req := newRequest(t, "GET", "/protected", nil)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 
 	})
 
-	t.Run("Test AuthMiddleware with invalid token", func(t *testing.T) {
+	t.Run("Test_AuthMiddleware_With_Invalid_Token", func(t *testing.T) {
 		router, _, _, _, tokenHandler := setupTestEnv()
 		accessToken := "testaccesstoken123456789"
 		refreshToken := "testrefreshtoken123456789"
@@ -969,10 +735,9 @@ func TestAuthMiddleware(t *testing.T) {
 			})
 		})
 
-		req, _ := http.NewRequest("GET", "/protected", nil)
+		req := newRequest(t, "GET", "/protected", nil)
 		req.Header.Set("Authorization", "Bearer "+accessToken)
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		w := applyRequest(router, req)
 
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 

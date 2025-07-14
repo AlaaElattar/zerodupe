@@ -156,8 +156,8 @@ func (client *Client) DownloadFile(fileHash string, outputDir string, fileName s
 }
 
 // Signup creates a new user account
-func (client *Client) Signup(username, password string) (*AuthResponse, error) {
-	return client.api.Signup(username, password)
+func (client *Client) Signup(username, password, confirmPAssword string) (error) {
+	return client.api.Signup(username, password, confirmPAssword)
 }
 
 // Login authenticates a user and returns access and refresh tokens

@@ -4,6 +4,5 @@ package model
 type User struct {
 	ID       uint   `gorm:"primaryKey;autoIncrement" json:"id"`
 	Username string `gorm:"uniqueIndex;not null" json:"username"`
-	Password string `json:"-"`
-	Salt     string `json:"-"`
+	Password []byte `json:"password" binding:"required"`
 }

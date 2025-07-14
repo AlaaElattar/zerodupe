@@ -33,41 +33,36 @@ func (c *HTTPClient) SetToken(token string) {
 }
 
 // Signup creates a new user account
-func (c *HTTPClient) Signup(username, password string) (*AuthResponse, error) {
-	reqBody := AuthRequest{
-		Username: username,
-		Password: password,
+func (c *HTTPClient) Signup(username, password, confirmPassword string) (error) {
+	reqBody := SignUpRequest{
+		Username:        username,
+		Password:        password,
+		ConfirmPassword: confirmPassword,
 	}
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal JSON: %w", err)
+		return fmt.Errorf("failed to marshal JSON: %w", err)
 	}
 
 	req, err := http.NewRequest("POST", c.serverURL+"/auth/signup", bytes.NewBuffer(jsonData))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to server: %w", err)
+		return fmt.Errorf("failed to connect to server: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("server error: %s - %s", resp.Status, string(bodyBytes))
+		return fmt.Errorf("server error: %s - %s", resp.Status, string(bodyBytes))
 	}
 
-	var result AuthResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	c.SetToken(result.AccessToken)
-	return &result, nil
+	return nil
 }
 
 // Login authenticates a user and returns access and refresh tokens
