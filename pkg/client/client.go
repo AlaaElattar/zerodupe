@@ -1,8 +1,8 @@
 package client
 
 import (
+	"errors"
 	"fmt"
-	"strings"
 	"time"
 	"zerodupe/pkg/hasher"
 )
@@ -41,7 +41,7 @@ func (client *Client) ExecuteWithAuth(fn func() error) error {
 	err := fn()
 
 	// If we get an auth error, try refreshing once and retry
-	if err != nil && strings.Contains(err.Error(), "unauthorized") {
+	if errors.Is(err, UnauthorizedError) {
 		if client.refreshToken == "" {
 			return err
 		}
@@ -156,7 +156,7 @@ func (client *Client) DownloadFile(fileHash string, outputDir string, fileName s
 }
 
 // Signup creates a new user account
-func (client *Client) Signup(username, password, confirmPAssword string) (error) {
+func (client *Client) Signup(username, password, confirmPAssword string) error {
 	return client.api.Signup(username, password, confirmPAssword)
 }
 

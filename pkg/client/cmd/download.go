@@ -8,10 +8,10 @@ import (
 )
 
 var (
-	downloadServer       string
-	downloadToken        string
-	downloadOutput       string
-	downloadFileName     string
+	downloadServer   string
+	downloadToken    string
+	downloadOutput   string
+	downloadFileName string
 )
 
 var downloadCmd = &cobra.Command{

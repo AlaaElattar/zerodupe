@@ -33,7 +33,7 @@ func (c *HTTPClient) SetToken(token string) {
 }
 
 // Signup creates a new user account
-func (c *HTTPClient) Signup(username, password, confirmPassword string) (error) {
+func (c *HTTPClient) Signup(username, password, confirmPassword string) error {
 	reqBody := SignUpRequest{
 		Username:        username,
 		Password:        password,
@@ -90,7 +90,7 @@ func (c *HTTPClient) Login(username, password string) (*AuthResponse, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("unauthorized: invalid credentials")
+		return nil, UnauthorizedError
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("server error: %s", resp.Status)
@@ -129,7 +129,7 @@ func (c *HTTPClient) RefreshToken(refreshToken string) (*AuthResponse, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("unauthorized: invalid refresh token")
+		return nil, UnauthorizedError
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("server error: %s", resp.Status)
@@ -170,7 +170,7 @@ func (c *HTTPClient) CheckFileExists(fileHash string) (bool, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return false, fmt.Errorf("unauthorized: invalid or missing token")
+		return false, UnauthorizedError
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -209,7 +209,7 @@ func (c *HTTPClient) GetMissingChunks(hashes []string) ([]string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("unauthorized: invalid or missing token")
+		return nil, UnauthorizedError
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -252,7 +252,7 @@ func (c *HTTPClient) UploadChunk(request ChunkUploadRequest) (*ChunkUploadRespon
 	}
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("unauthorized: invalid or missing token")
+		return nil, UnauthorizedError
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -277,7 +277,7 @@ func (c *HTTPClient) GetFileChunks(fileHash string) (*DownloadFileHashesResponse
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("unauthorized: invalid or missing token")
+		return nil, UnauthorizedError
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -307,7 +307,7 @@ func (c *HTTPClient) DownloadChunk(chunkHash string) ([]byte, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("unauthorized: invalid or missing token")
+		return nil, UnauthorizedError
 	}
 
 	if resp.StatusCode != http.StatusOK {

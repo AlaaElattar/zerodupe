@@ -26,7 +26,6 @@ var refreshCmd = &cobra.Command{
 		}
 		fmt.Println("Token refreshed successfully")
 		fmt.Printf("New access token: %s\n", resp.AccessToken)
-		fmt.Printf("New refresh token: %s\n", resp.RefreshToken)
 	},
 }
 

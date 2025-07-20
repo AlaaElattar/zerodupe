@@ -2,7 +2,7 @@ package client
 
 type API interface {
 	// Authentication methods
-	Signup(username, password, confirmPassword string) (error)
+	Signup(username, password, confirmPassword string) error
 	Login(username, password string) (*AuthResponse, error)
 	RefreshToken(refreshToken string) (*AuthResponse, error)
 

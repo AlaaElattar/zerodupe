@@ -25,14 +25,8 @@ var rootCmd = &cobra.Command{
 		zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 
 		if serverConfig.JWTSecret == "" {
-			// Generate a random secret if not provided
-			const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-			secret := make([]byte, 32)
-			for i := range secret {
-				secret[i] = charset[time.Now().UnixNano()%int64(len(charset))]
-			}
-			serverConfig.JWTSecret = string(secret)
-			log.Warn().Msg("No JWT secret provided. Generated a random secret. This is not secure for production use.")
+			log.Error().Msg("No JWT secret provided. Please set JWT_SECRET in your environment or config. Exiting.")
+			os.Exit(1)
 		}
 
 		if err := os.MkdirAll(serverConfig.StorageDir, 0755); err != nil {
@@ -84,7 +78,7 @@ func init() {
 	rootCmd.Flags().IntVarP(&serverConfig.Port, "port", "p", 8080, "Server port")
 	rootCmd.Flags().StringVarP(&serverConfig.StorageDir, "storage", "s", "data/storage", "Storage directory")
 	rootCmd.Flags().StringVarP(&serverConfig.JWTSecret, "secret", "", "", "JWT Secret")
-	rootCmd.Flags().IntVar(&serverConfig.AccessTokenExpiryMin, "access-token-expiry-min", 15, "Access token expiry in minutes")
+	rootCmd.Flags().IntVar(&serverConfig.AccessTokenExpiryMin, "access-token-expiry-min", 1, "Access token expiry in minutes")
 	rootCmd.Flags().IntVar(&serverConfig.RefreshTokenExpiryHour, "refresh-token-expiry-hour", 24, "Refresh token expiry in hours")
 }
 
