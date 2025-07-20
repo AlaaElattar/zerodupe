@@ -160,6 +160,11 @@ func (h *Handler) LoginHandler(c *gin.Context) {
 		return
 	}
 
+	if !auth.VerifyPassword(user.Password, request.Password) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
+		return
+	}
+
 	// Generate tokens
 	tokenPair, err := h.tokenHandler.CreateTokenPair(user.ID, user.Username)
 	if err != nil {

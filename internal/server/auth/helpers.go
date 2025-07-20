@@ -1,32 +1,15 @@
 package auth
 
 import (
-	"bytes"
-	"crypto/rand"
-	"crypto/sha256"
-	"io"
+	"golang.org/x/crypto/bcrypt"
 )
 
-var saltLen = 5
-
-// HashAndSaltPassword hashes given password and append salt to it
+// HashAndSaltPassword hashes the given password using bcrypt
 func HashAndSaltPassword(password []byte) ([]byte, error) {
-	salt := make([]byte, saltLen)
-	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
-		return []byte{}, err
-	}
-
-	hashedPassword := sha256.Sum256(append(salt, password...))
-	return append(salt, hashedPassword[:]...), nil
+	return bcrypt.GenerateFromPassword(password, bcrypt.DefaultCost)
 }
 
-// VerifyPassword checks if given password is same as hashed one
+// VerifyPassword checks if the given password matches the hashed one using bcrypt
 func VerifyPassword(hashedPassword []byte, password string) bool {
-	hashedPasswordCopy := make([]byte, len(hashedPassword))
-
-	copy(hashedPasswordCopy, hashedPassword)
-	salt := hashedPasswordCopy[:saltLen]
-
-	checkedPass := sha256.Sum256(append(salt, []byte(password)...))
-	return bytes.Equal(append(salt, checkedPass[:]...), hashedPassword)
+	return bcrypt.CompareHashAndPassword(hashedPassword, []byte(password)) == nil
 }
