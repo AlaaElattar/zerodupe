@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 	"zerodupe/internal/server/api"
@@ -24,9 +25,57 @@ var rootCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 
+		// JWT Secret
 		if serverConfig.JWTSecret == "" {
-			log.Error().Msg("No JWT secret provided. Please set JWT_SECRET in your environment or config. Exiting.")
-			os.Exit(1)
+			serverConfig.JWTSecret = os.Getenv("JWT_SECRET")
+			if serverConfig.JWTSecret == "" {
+				log.Error().Msg("No JWT secret provided. Please set JWT_SECRET in your environment or config. Exiting.")
+				os.Exit(1)
+			}
+		}
+
+		// Storage Dir
+		if serverConfig.StorageDir == "" {
+			serverConfig.StorageDir = os.Getenv("STORAGE_DIR")
+			if serverConfig.StorageDir == "" {
+				serverConfig.StorageDir = "data/storage"
+			}
+		}
+
+		// Port
+		if serverConfig.Port == 0 {
+			if portStr := os.Getenv("PORT"); portStr != "" {
+				if port, err := strconv.Atoi(portStr); err == nil {
+					serverConfig.Port = port
+				}
+			}
+			if serverConfig.Port == 0 {
+				serverConfig.Port = 8080
+			}
+		}
+
+		// Access Token Expiry (minutes)
+		if serverConfig.AccessTokenExpiryMin == 0 {
+			if minStr := os.Getenv("ACCESS_TOKEN_EXPIRY_MIN"); minStr != "" {
+				if min, err := strconv.Atoi(minStr); err == nil {
+					serverConfig.AccessTokenExpiryMin = min
+				}
+			}
+			if serverConfig.AccessTokenExpiryMin == 0 {
+				serverConfig.AccessTokenExpiryMin = 30
+			}
+		}
+
+		// Refresh Token Expiry (hours)
+		if serverConfig.RefreshTokenExpiryHour == 0 {
+			if hourStr := os.Getenv("REFRESH_TOKEN_EXPIRY_HOUR"); hourStr != "" {
+				if hour, err := strconv.Atoi(hourStr); err == nil {
+					serverConfig.RefreshTokenExpiryHour = hour
+				}
+			}
+			if serverConfig.RefreshTokenExpiryHour == 0 {
+				serverConfig.RefreshTokenExpiryHour = 24
+			}
 		}
 
 		if err := os.MkdirAll(serverConfig.StorageDir, 0755); err != nil {
@@ -78,7 +127,7 @@ func init() {
 	rootCmd.Flags().IntVarP(&serverConfig.Port, "port", "p", 8080, "Server port")
 	rootCmd.Flags().StringVarP(&serverConfig.StorageDir, "storage", "s", "data/storage", "Storage directory")
 	rootCmd.Flags().StringVarP(&serverConfig.JWTSecret, "secret", "", "", "JWT Secret")
-	rootCmd.Flags().IntVar(&serverConfig.AccessTokenExpiryMin, "access-token-expiry-min", 1, "Access token expiry in minutes")
+	rootCmd.Flags().IntVar(&serverConfig.AccessTokenExpiryMin, "access-token-expiry-min", 30, "Access token expiry in minutes")
 	rootCmd.Flags().IntVar(&serverConfig.RefreshTokenExpiryHour, "refresh-token-expiry-hour", 24, "Refresh token expiry in hours")
 }
 
