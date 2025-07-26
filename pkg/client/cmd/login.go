@@ -26,7 +26,7 @@ var loginCmd = &cobra.Command{
 		if err != nil {
 			log.Fatalf("Failed to login: %v", err)
 		}
-		c.SetTokens(resp.AccessToken, resp.RefreshToken)
+		c.SetToken(resp.AccessToken)
 		fmt.Println("Login successful.")
 		fmt.Printf("Access token: %s\n", resp.AccessToken)
 		fmt.Printf("Refresh token: %s\n", resp.RefreshToken)

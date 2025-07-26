@@ -9,7 +9,6 @@ import (
 	"zerodupe/internal/server/config"
 	"zerodupe/internal/server/storage"
 	"zerodupe/internal/server/storage/filesystem"
-	"zerodupe/internal/server/storage/sqlite"
 
 	_ "zerodupe/internal/server/docs" // This is the generated docs package
 
@@ -24,7 +23,7 @@ type Server struct {
 	router     *gin.Engine
 	httpServer *http.Server
 	config     config.Config
-	storage    storage.FileStorage
+	storage    storage.FileSystem
 	handler    *Handler
 }
 
@@ -36,7 +35,7 @@ func NewServer(config config.Config) (*Server, error) {
 		return nil, fmt.Errorf("failed to create storage: %w", err)
 	}
 
-	userStorage, err := sqlite.NewSqliteStorage(config.StorageDir + "/users.db")
+	userStorage, err := storage.NewSqliteStorage(config.StorageDir + "/users.db")
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create user storage")
 		return nil, fmt.Errorf("failed to create user storage: %w", err)

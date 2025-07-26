@@ -30,9 +30,8 @@ func NewClient(serverURL string) *Client {
 }
 
 // SetTokens updates the client's authentication tokens
-func (client *Client) SetTokens(accessToken, refreshToken string) {
+func (client *Client) SetToken(accessToken string) {
 	client.accessToken = accessToken
-	client.refreshToken = refreshToken
 	client.api.SetToken(accessToken)
 }
 
@@ -53,7 +52,7 @@ func (client *Client) ExecuteWithAuth(fn func() error) error {
 		}
 
 		// Update tokens and retry
-		client.SetTokens(resp.AccessToken, resp.RefreshToken)
+		client.SetToken(resp.AccessToken)
 		return fn()
 	}
 

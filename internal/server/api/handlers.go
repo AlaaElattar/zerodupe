@@ -15,15 +15,15 @@ import (
 
 // Handler handles all API requests
 type Handler struct {
-	fileStorage  storage.FileStorage
-	userStorage  storage.UserStorage
+	fileStorage  storage.FileSystem
+	dbStorage    storage.DB
 	tokenHandler auth.TokenManager
 }
 
-func NewHandler(fileStorage storage.FileStorage, userStorage storage.UserStorage, tokenHandler auth.TokenManager) *Handler {
+func NewHandler(fileStorage storage.FileSystem, dbStorage storage.DB, tokenHandler auth.TokenManager) *Handler {
 	return &Handler{
 		fileStorage:  fileStorage,
-		userStorage:  userStorage,
+		dbStorage:    dbStorage,
 		tokenHandler: tokenHandler,
 	}
 }
@@ -108,7 +108,7 @@ func (h *Handler) SignUpHandler(c *gin.Context) {
 	}
 
 	// Check if username already exists
-	_, err := h.userStorage.GetUserByUsername(request.Username)
+	_, err := h.dbStorage.GetUserByUsername(request.Username)
 	if err == nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "user already exists"})
 		return
@@ -120,7 +120,7 @@ func (h *Handler) SignUpHandler(c *gin.Context) {
 		return
 	}
 
-	err = h.userStorage.CreateUser(&model.User{
+	err = h.dbStorage.CreateUser(&model.User{
 		Username: request.Username,
 		Password: password,
 	})
@@ -151,7 +151,7 @@ func (h *Handler) LoginHandler(c *gin.Context) {
 		return
 	}
 
-	user, err := h.userStorage.GetUserByUsername(request.Username)
+	user, err := h.dbStorage.GetUserByUsername(request.Username)
 	if err == gorm.ErrRecordNotFound {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user does not exist"})
 		return
@@ -238,7 +238,7 @@ func (h *Handler) UploadFileHandler(c *gin.Context) {
 	log.Printf("Received chunk: Hash=%s, ChunkOrder=%d\n",
 		request.FileHash, request.ChunkOrder)
 
-	if err := h.fileStorage.SaveChunkMetadata(request.FileHash, request.ChunkHash, request.ChunkOrder); err != nil {
+	if err := h.dbStorage.SaveChunkMetadata(request.FileHash, request.ChunkHash, request.ChunkOrder); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save chunk metadata"})
 		return
 	}
@@ -291,14 +291,20 @@ func (h *Handler) CheckFileHashHandler(c *gin.Context) {
 		return
 	}
 
-	exists, err := h.fileStorage.CheckFileExists(fileHash)
+	dbExists, err := h.dbStorage.CheckFileExists(fileHash)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	fsExists, err := h.fileStorage.CheckFileExists(fileHash)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
 	response := CheckFileResponse{
-		Exists: exists,
+		Exists: dbExists || fsExists,
 		Hash:   fileHash,
 	}
 
@@ -349,7 +355,7 @@ func (h *Handler) DownloadFileHandler(c *gin.Context) {
 	fileHash := c.Param("hash")
 
 	log.Println("Downloading file with hash: " + fileHash)
-	metadata, err := h.fileStorage.GetFileMetadata(fileHash)
+	metadata, err := h.dbStorage.GetFileMetadata(fileHash)
 
 	if err != nil {
 		// If file metadata not found, check if it's a single chunk file
@@ -369,14 +375,19 @@ func (h *Handler) DownloadFileHandler(c *gin.Context) {
 		return
 	}
 
+    if metadata == nil || len(metadata.Chunks) == 0 {
+        c.JSON(http.StatusNotFound, gin.H{"error": "File metadata not found"})
+        return
+    }
+
 	sort.Slice(metadata.Chunks, func(i, j int) bool {
 		return metadata.Chunks[i].ChunkOrder < metadata.Chunks[j].ChunkOrder
 	})
 
-	var orderedHashes []string
-	for _, chunk := range metadata.Chunks {
-		orderedHashes = append(orderedHashes, chunk.ChunkHash)
-	}
+    orderedHashes := make([]string, len(metadata.Chunks))
+    for i, chunk := range metadata.Chunks {
+        orderedHashes[i] = chunk.ChunkHash
+    }
 
 	// return chunks hashes ordered
 	result := DownloadFileResponse{

@@ -1,14 +1,11 @@
 package filesystem
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"zerodupe/internal/server/model"
 	"zerodupe/pkg/hasher"
 
-	"github.com/juju/fslock"
 	"github.com/rs/zerolog/log"
 )
 
@@ -23,7 +20,6 @@ func NewFilesystemStorage(storageDir string) (*FilesystemStorage, error) {
 	dirs := []string{
 		storageDir,
 		filepath.Join(storageDir, "blocks"),
-		filepath.Join(storageDir, "meta"),
 	}
 
 	for _, dir := range dirs {
@@ -39,15 +35,7 @@ func NewFilesystemStorage(storageDir string) (*FilesystemStorage, error) {
 
 // CheckFileExists checks if a file exists in meta or blocks directory
 func (fs *FilesystemStorage) CheckFileExists(fileHash string) (bool, error) {
-	// First check metadata
-	metaPath := filepath.Join(fs.storageDir, "meta", fileHash[:4], fileHash)
-	if _, err := os.Stat(metaPath); err == nil {
-		return true, nil
-	} else if !os.IsNotExist(err) {
-		return false, err
-	}
-
-	// If no metadata, check if it's a single chunk file
+	// check if it's a single chunk file
 	blockPath := filepath.Join(fs.storageDir, "blocks", fileHash[:4], fileHash)
 	if _, err := os.Stat(blockPath); err == nil {
 		return true, nil
@@ -81,59 +69,6 @@ func (fs *FilesystemStorage) CheckChunkExists(hashes []string) ([]string, []stri
 	return existingChunks, missingChunks, nil
 }
 
-// SaveChunkMetadata saves chunk metadata in json format
-func (fs *FilesystemStorage) SaveChunkMetadata(fileHash, chunkHash string, chunkOrder int) error {
-	// Ensure directory exists
-	metaDir := filepath.Join(fs.storageDir, "meta", fileHash[:4])
-	if err := os.MkdirAll(metaDir, 0755); err != nil {
-		return fmt.Errorf("failed to create metadata directory: %w", err)
-	}
-
-	metaPath := filepath.Join(metaDir, fileHash)
-	fileLock := fslock.New(metaPath)
-
-	lockErr := fileLock.TryLock()
-	if lockErr != nil {
-		log.Error().Err(lockErr).Msg("Failed to acquire lock")
-		return lockErr
-	}
-	defer fileLock.Unlock()
-
-	var metadata model.FileMetadata
-	if _, err := os.Stat(metaPath); err == nil {
-		content, err := os.ReadFile(metaPath)
-		if err != nil {
-			return fmt.Errorf("failed to read metadata file: %w", err)
-		}
-		if err := json.Unmarshal(content, &metadata); err != nil {
-			return fmt.Errorf("failed to parse metadata: %w", err)
-		}
-	}
-
-	// Check if chunk already exists in metadata
-	for _, chunk := range metadata.Chunks {
-		if chunk.ChunkOrder == chunkOrder && chunk.ChunkHash == chunkHash {
-			return nil
-		}
-	}
-
-	metadata.Chunks = append(metadata.Chunks, model.ChunkMetadata{
-		ChunkOrder: chunkOrder,
-		ChunkHash:  chunkHash,
-	})
-
-	newContent, err := json.Marshal(metadata)
-	if err != nil {
-		return fmt.Errorf("failed to marshal metadata: %w", err)
-	}
-
-	if err := os.WriteFile(metaPath, newContent, 0644); err != nil {
-		return fmt.Errorf("failed to write metadata file: %w", err)
-	}
-
-	return nil
-}
-
 // SaveChunkData saves chunk data
 func (fs *FilesystemStorage) SaveChunkData(chunkHash string, content []byte) (string, error) {
 	// Ensure directory exists
@@ -163,27 +98,6 @@ func (fs *FilesystemStorage) SaveChunkData(chunkHash string, content []byte) (st
 	}
 
 	return calculatedHash, nil
-}
-
-// GetFileMetadata gets file metadata
-func (fs *FilesystemStorage) GetFileMetadata(fileHash string) (*model.FileMetadata, error) {
-	metaPath := filepath.Join(fs.storageDir, "meta", fileHash[:4], fileHash)
-
-	if _, err := os.Stat(metaPath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("file metadata not found: %w", err)
-	}
-
-	content, err := os.ReadFile(metaPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read metadata file: %w", err)
-	}
-
-	var metadata model.FileMetadata
-	if err := json.Unmarshal(content, &metadata); err != nil {
-		return nil, fmt.Errorf("failed to parse metadata: %w", err)
-	}
-
-	return &metadata, nil
 }
 
 // GetChunkData gets chunk data

@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
 	"log"
+	"path/filepath"
 	"zerodupe/pkg/client"
+
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -20,17 +22,18 @@ var downloadCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		fileHash := args[0]
-		fmt.Printf("Downloading file with hash %s from %s\n", fileHash, downloadServer)
 
 		c := client.NewClient(downloadServer)
+		c.SetToken(downloadToken)
 
-		err := c.ExecuteWithAuth(func() error {
-			return c.DownloadFile(fileHash, downloadOutput, downloadFileName)
-		})
-		if err != nil {
+		fmt.Printf("Downloading file with hash %s from %s\n", fileHash, downloadServer)
+
+		outputPath := filepath.Join(downloadOutput, downloadFileName)
+		if err := c.DownloadFile(fileHash, downloadOutput, downloadFileName); err != nil {
 			log.Fatalf("Failed to download file: %v", err)
 		}
-		fmt.Println("File downloaded successfully.")
+
+		fmt.Printf("File downloaded successfully to: %s\n", outputPath)
 	},
 }
 

@@ -22,7 +22,7 @@ var uploadCmd = &cobra.Command{
 		fmt.Printf("Uploading file %s to %s\n", filePath, uploadServer)
 
 		c := client.NewClient(uploadServer)
-		c.SetTokens(uploadToken, uploadRefreshToken)
+		c.SetToken(uploadToken)
 
 		err := c.ExecuteWithAuth(func() error {
 			return c.UploadFile(filePath)
