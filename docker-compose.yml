@@ -4,19 +4,19 @@ services:
   zerodupe-server:
     build:
       context: .
-      dockerfile: internal/server/Dockerfile
+      dockerfile: internal/server/Dockerfile # Builds server binary from ./cmd/zerodupe-server/main.go
     container_name: zerodupe-server
     ports:
       - "8080:8080"
     volumes:
       - zerodupe-data:/data/storage
-    environment:  
+    environment:
       - JWT_SECRET=supersecret
       - STORAGE_DIR=/data/storage
       - PORT=8080
       - ACCESS_TOKEN_EXPIRY_MIN=15
       - REFRESH_TOKEN_EXPIRY_HOUR=24
-    command: ["./zerodupe-server", "-port", "8080"]
+    command: ["./zerodupe-server", "--port", "8080", "--secret", "supersecret"]
     restart: always
     networks:
       - zerodupe-network
@@ -24,8 +24,8 @@ services:
   zerodupe-client:
     build:
       context: .
-      dockerfile: pkg/client/Dockerfile
-    container_name: zerodupe-client 
+      dockerfile: pkg/client/Dockerfile # Builds client binary from ./cmd/zerodupe-client/main.go
+    container_name: zerodupe-client
     depends_on:
       - zerodupe-server
     networks:
