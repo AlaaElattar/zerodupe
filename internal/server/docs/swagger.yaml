@@ -1,0 +1,374 @@
+definitions:
+  api.CheckChunksRequest:
+    properties:
+      hashes:
+        items:
+          type: string
+        type: array
+    required:
+    - hashes
+    type: object
+  api.CheckChunksResponse:
+    properties:
+      missing:
+        items:
+          type: string
+        type: array
+    type: object
+  api.CheckFileResponse:
+    properties:
+      exists:
+        type: boolean
+      hash:
+        type: string
+    type: object
+  api.DownloadFileResponse:
+    properties:
+      chunk_hashes:
+        items:
+          type: string
+        type: array
+      chunks_count:
+        type: integer
+      file_hash:
+        type: string
+    required:
+    - file_hash
+    type: object
+  api.LoginRequest:
+    properties:
+      password:
+        example: password123
+        type: string
+      username:
+        example: john_doe
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  api.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  api.SignUpRequest:
+    properties:
+      confirm_password:
+        example: password123
+        type: string
+      password:
+        example: password123
+        type: string
+      username:
+        example: john_doe
+        type: string
+    required:
+    - confirm_password
+    - password
+    - username
+    type: object
+  api.UploadRequest:
+    properties:
+      chunk_hash:
+        type: string
+      chunk_order:
+        type: integer
+      content:
+        items:
+          type: integer
+        type: array
+      file_hash:
+        type: string
+    required:
+    - chunk_hash
+    - chunk_order
+    - file_hash
+    type: object
+  api.UploadResponse:
+    properties:
+      file_hash:
+        type: string
+      hash_mismatch:
+        type: boolean
+      message:
+        type: string
+    type: object
+  auth.TokenPair:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user and return access tokens
+      parameters:
+      - description: User login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Login successful
+          schema:
+            $ref: '#/definitions/auth.TokenPair'
+        "400":
+          description: Invalid request format
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: User does not exist
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Login user
+      tags:
+      - auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Refresh an expired access token using a refresh token
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: New access token
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request format
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Invalid refresh token
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Refresh access token
+      tags:
+      - auth
+  /auth/signup:
+    post:
+      consumes:
+      - application/json
+      description: Create a new user account with username and password
+      parameters:
+      - description: User registration data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.SignUpRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: user registered successfully
+          schema:
+            type: string
+        "400":
+          description: Invalid request format or password mismatch
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: User already exists
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      summary: Register a new user
+      tags:
+      - auth
+  /check:
+    post:
+      consumes:
+      - application/json
+      description: Check which chunks exist and return missing ones
+      parameters:
+      - description: Chunk hashes to check
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.CheckChunksRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Missing chunks
+          schema:
+            $ref: '#/definitions/api.CheckChunksResponse'
+        "400":
+          description: Invalid request format
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Check chunk existence
+      tags:
+      - files
+  /check/{filehash}:
+    get:
+      consumes:
+      - application/json
+      description: Check if a file with the given hash exists on the server
+      parameters:
+      - description: File hash
+        in: path
+        minLength: 4
+        name: filehash
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: File existence status
+          schema:
+            $ref: '#/definitions/api.CheckFileResponse'
+        "400":
+          description: Invalid file hash
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Check if file exists
+      tags:
+      - files
+  /chunk/{hash}:
+    get:
+      consumes:
+      - application/json
+      description: Download the content of a specific chunk
+      parameters:
+      - description: Chunk hash
+        in: path
+        name: hash
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: Chunk content
+          schema:
+            type: file
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get chunk content
+      tags:
+      - files
+  /download/{hash}:
+    get:
+      consumes:
+      - application/json
+      description: Get file metadata including ordered chunk hashes for download
+      parameters:
+      - description: File hash
+        in: path
+        name: hash
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: File metadata
+          schema:
+            $ref: '#/definitions/api.DownloadFileResponse'
+        "404":
+          description: File not found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Download file metadata
+      tags:
+      - files
+  /upload:
+    post:
+      consumes:
+      - application/json
+      description: Upload a file chunk for deduplication storage
+      parameters:
+      - description: File chunk data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/api.UploadRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: File uploaded successfully
+          schema:
+            $ref: '#/definitions/api.UploadResponse'
+        "400":
+          description: Invalid request format
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Chunk does not exist
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Failed to save chunk data
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Upload file chunk
+      tags:
+      - files
+swagger: "2.0"
