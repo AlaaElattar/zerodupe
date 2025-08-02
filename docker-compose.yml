@@ -1,0 +1,41 @@
+version: "3.8"
+
+services:
+  zerodupe-server:
+    build:
+      context: .
+      dockerfile: internal/server/Dockerfile
+    container_name: zerodupe-server
+    ports:
+      - "8080:8080"
+    volumes:
+      - zerodupe-data:/data/storage
+    environment:  
+      - JWT_SECRET=supersecret
+      - STORAGE_DIR=/data/storage
+      - PORT=8080
+      - ACCESS_TOKEN_EXPIRY_MIN=15
+      - REFRESH_TOKEN_EXPIRY_HOUR=24
+    command: ["./zerodupe-server", "-port", "8080"]
+    restart: always
+    networks:
+      - zerodupe-network
+
+  zerodupe-client:
+    build:
+      context: .
+      dockerfile: pkg/client/Dockerfile
+    container_name: zerodupe-client 
+    depends_on:
+      - zerodupe-server
+    networks:
+      - zerodupe-network
+
+volumes:
+  zerodupe-data:
+    name: zerodupe-data
+
+networks:
+  zerodupe-network:
+    name: zerodupe-network
+    driver: bridge
